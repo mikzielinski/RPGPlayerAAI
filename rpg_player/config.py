@@ -1,0 +1,33 @@
+import os
+
+# LLM
+CLASSIFIER_MODEL = "gpt-4o-mini"
+AGENT_MODEL = "gpt-4o"
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+
+# STT
+WHISPER_MODEL = "base"  # or "small" for better accuracy
+SILENCE_THRESHOLD_SEC = 1.5
+
+# Session behaviour
+BUFFER_MAX_EXCHANGES = 15
+SPEAK_UP_COOLDOWN_SEC = 45
+RAG_TIMEOUT_SEC = 2.5
+MAX_CREATION_QUESTIONS = 5
+
+# TTS backend: "edge" or "kokoro"
+TTS_BACKEND = "edge"
+TTS_VOICE = "pl-PL-MarekNeural"  # Polish male; alternative: pl-PL-ZofiaNeural (female)
+
+# Paths
+CHARACTER_FILE = "data/character.json"
+PERSONALITY_FILE = "data/player_personality.json"
+GAME_FILES_DIR = "data/game_files/"
+CHROMA_DIR = "data/chroma_db/"
+
+# Cooldown overrides keyed by talk_frequency value from personality JSON
+COOLDOWN_BY_FREQUENCY = {
+    "często": 30,
+    "umiarkowanie": 45,
+    "rzadko ale trafnie": 90,
+}

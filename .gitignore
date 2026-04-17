@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+data/chroma_db/
+data/character.json
+data/player_personality.json
+data/kokoro-v0_19.onnx
+data/voices.json
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
