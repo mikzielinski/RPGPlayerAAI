@@ -1,18 +1,22 @@
-"""LangChain agent — two-layer (player + character) RPG AI agent."""
+"""LangChain agent — two-layer (player + character) RPG AI agent.
+
+Uses bind_tools + manual tool-calling loop instead of AgentExecutor so it
+works with any LangChain 0.2/0.3+ version without breaking on internal moves.
+"""
 from __future__ import annotations
 
 import asyncio
 import random
 import re
-from typing import Optional
 
-from langchain.agents import AgentExecutor, create_openai_tools_agent
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 
 from rpg_player import config
 from rpg_player.session import rag as rag_module
+
+_MAX_TOOL_ROUNDS = 5  # prevent runaway tool-call loops
 
 _SYSTEM_TEMPLATE = """=== WARSTWA GRACZA ===
 Jesteś graczem przy stole RPG. Twój styl bycia przy stole:
@@ -44,11 +48,7 @@ Tryb wyzwolenia: {trigger_mode}
 - SPEAK_UP: wejdź naturalnie — zacznij od "Czekaj—", "Właściwie...", "Hej, a co jeśli..." albo wskocz w połowie myśli"""
 
 
-def _build_system_prompt(
-    personality: dict,
-    character: dict,
-    trigger_mode: str,
-) -> str:
+def _build_system_prompt(personality: dict, character: dict, trigger_mode: str) -> str:
     return _SYSTEM_TEMPLATE.format(
         table_archetype=personality.get("table_archetype", "neutralny"),
         talk_frequency=personality.get("talk_frequency", "umiarkowanie"),
@@ -68,44 +68,28 @@ def _build_system_prompt(
 
 
 def _parse_dice(notation: str) -> tuple[int, int, int]:
-    """Parse NdM+K notation into (num, sides, modifier)."""
     notation = notation.strip().lower().replace(" ", "")
     match = re.fullmatch(r"(\d+)d(\d+)([+-]\d+)?", notation)
     if not match:
         raise ValueError(f"Nieprawidłowa notacja kości: {notation}")
-    num = int(match.group(1))
-    sides = int(match.group(2))
-    modifier = int(match.group(3) or 0)
-    return num, sides, modifier
+    return int(match.group(1)), int(match.group(2)), int(match.group(3) or 0)
 
 
-def build_agent(
-    personality: dict,
-    character: dict,
-    vectorstore,
-    tts,
-    trigger_mode: str,
-    behavior_instructions: str = "",
-) -> AgentExecutor:
-    """Construct and return an AgentExecutor for the current turn."""
-
+def _make_tools(character: dict, vectorstore, tts):
+    """Build tool callables closed over current session context."""
     char_class = character.get("char_class", "postać")
-    char_name = character.get("name", "Postać")
-
-    # ----- Tool definitions (closures capture char/vectorstore context) -----
 
     @tool
     def roll_dice(notation: str) -> str:
         """Rzuć kośćmi używając notacji RPG (np. '2d6+3', '1d20').
         Zwraca wynik tak jak postać by go opisała."""
         import random as _r
-
         try:
             num, sides, modifier = _parse_dice(notation)
             rolls = [_r.randint(1, sides) for _ in range(num)]
             total = sum(rolls) + modifier
             rolls_str = "+".join(str(r) for r in rolls)
-            mod_str = f"{modifier:+d}" if modifier != 0 else ""
+            mod_str = f"{modifier:+d}" if modifier else ""
             return f"[{rolls_str}]{mod_str} = {total}"
         except ValueError as e:
             return str(e)
@@ -114,7 +98,6 @@ def build_agent(
     def check_character_sheet(field: str) -> str:
         """Sprawdź własną kartę postaci: statystyki, ekwipunek, zaklęcia.
         Nie można sprawdzać kart innych postaci."""
-        field_lower = field.lower()
         mapping = {
             "stats": character.get("stats", {}),
             "statystyki": character.get("stats", {}),
@@ -133,20 +116,15 @@ def build_agent(
             "level": character.get("level", 1),
             "poziom": character.get("level", 1),
         }
-        value = mapping.get(field_lower)
-        if value is None:
-            return f"Nie mam takiego pola w karcie: {field}"
-        return str(value)
+        value = mapping.get(field.lower())
+        return str(value) if value is not None else f"Nie mam takiego pola w karcie: {field}"
 
     @tool
     def lookup_rules(query: str) -> str:
         """Wyszukaj zasady lub informacje o świecie w załadowanych dokumentach gry.
-        Używaj tylko dla konkretnych zasad, zaklęć lub informacji o świecie — nie dla ogólnej wiedzy."""
+        Używaj tylko dla konkretnych zasad, zaklęć lub lore — nie dla ogólnej wiedzy."""
         if vectorstore is None:
-            phrase = random.choice(rag_module.TIMEOUT_PHRASES_PL)
-            return phrase
-
-        # Run async RAG lookup in sync context
+            return random.choice(rag_module.TIMEOUT_PHRASES_PL)
         loop = asyncio.new_event_loop()
         try:
             result = loop.run_until_complete(
@@ -154,32 +132,9 @@ def build_agent(
             )
         finally:
             loop.close()
-
         return result or random.choice(rag_module.TIMEOUT_PHRASES_PL)
 
-    # ----- Build agent -----
-
-    system_prompt = _build_system_prompt(personality, character, trigger_mode)
-    if behavior_instructions:
-        system_prompt = system_prompt + "\n" + behavior_instructions
-
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        MessagesPlaceholder("chat_history", optional=True),
-        ("human", "{input}"),
-        MessagesPlaceholder("agent_scratchpad"),
-    ])
-
-    llm = ChatOpenAI(
-        model=config.AGENT_MODEL,
-        openai_api_key=config.OPENAI_API_KEY,
-        temperature=0.85,
-    )
-
-    tools = [roll_dice, check_character_sheet, lookup_rules]
-    agent = create_openai_tools_agent(llm, tools, prompt)
-
-    return AgentExecutor(agent=agent, tools=tools, verbose=False)
+    return [roll_dice, check_character_sheet, lookup_rules]
 
 
 def run_agent(
@@ -191,10 +146,44 @@ def run_agent(
     buffer_text: str,
     behavior_instructions: str = "",
 ) -> str:
-    """Build agent for this turn, invoke with buffer context, return response text."""
-    executor = build_agent(personality, character, vectorstore, tts, trigger_mode, behavior_instructions)
-    result = executor.invoke({
-        "input": buffer_text,
-        "chat_history": [],
-    })
-    return result.get("output", "")
+    """Invoke the two-layer agent and return its response text."""
+    system_prompt = _build_system_prompt(personality, character, trigger_mode)
+    if behavior_instructions:
+        system_prompt += "\n" + behavior_instructions
+
+    tools = _make_tools(character, vectorstore, tts)
+    tool_map = {t.name: t for t in tools}
+
+    llm = ChatOpenAI(
+        model=config.AGENT_MODEL,
+        openai_api_key=config.OPENAI_API_KEY,
+        temperature=0.85,
+    )
+    llm_with_tools = llm.bind_tools(tools)
+
+    messages: list = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=buffer_text),
+    ]
+
+    for _ in range(_MAX_TOOL_ROUNDS):
+        response: AIMessage = llm_with_tools.invoke(messages)
+        messages.append(response)
+
+        if not getattr(response, "tool_calls", None):
+            return response.content or ""
+
+        # Execute each requested tool and feed results back
+        for call in response.tool_calls:
+            name = call["name"]
+            args = call["args"]
+            try:
+                result = tool_map[name].invoke(args) if name in tool_map else f"Nieznane narzędzie: {name}"
+            except Exception as exc:
+                result = f"Błąd narzędzia {name}: {exc}"
+            messages.append(ToolMessage(content=str(result), tool_call_id=call["id"]))
+
+    # Fallback if max rounds hit — ask for a plain response
+    messages.append(HumanMessage(content="Odpowiedz teraz jako postać, bez użycia narzędzi."))
+    final = llm.invoke(messages)
+    return final.content or ""
