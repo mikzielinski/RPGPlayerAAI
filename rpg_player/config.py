@@ -28,6 +28,30 @@ MAX_CREATION_QUESTIONS = 5
 # After N consecutive WAITs on a question → force MY_TURN
 CONSECUTIVE_WAIT_FORCE_THRESHOLD: int = 4
 
+# Reply control:
+# - "manual": bot speaks only after explicit force command ("f")
+# - "gm": bot replies when directly addressed by GM/player, otherwise waits
+# - "auto": legacy autonomous classifier mode
+RESPONSE_MODE = os.environ.get("RESPONSE_MODE", "gm").strip().lower()
+if RESPONSE_MODE not in {"manual", "gm", "auto"}:
+    RESPONSE_MODE = "gm"
+
+# If true, bot can interrupt with SPEAK_UP in auto mode.
+ALLOW_PROACTIVE_SPEAK_UP = os.environ.get("ALLOW_PROACTIVE_SPEAK_UP", "0").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+
+# Safety switch for loading ADDITIONAL_PLAYERS.
+ENABLE_ADDITIONAL_AI_PLAYERS = os.environ.get("ENABLE_ADDITIONAL_AI_PLAYERS", "0").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+
 # TTS backend: "edge" or "kokoro"
 TTS_BACKEND = "edge"
 TTS_VOICE = "pl-PL-MarekNeural"

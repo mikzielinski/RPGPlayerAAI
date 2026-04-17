@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RPG AI Player Bot - Web Panel</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>RPG AI Player Bot - Panel WWW</h1>
+      <div class="topbar-actions">
+        <button id="refreshStateBtn" class="btn">Odswiez</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="card">
+        <h2>Status systemu</h2>
+        <div id="statusGrid" class="status-grid"></div>
+      </section>
+
+      <section class="card">
+        <h2>Sterowanie botem</h2>
+        <div class="actions">
+          <button id="startBotBtn" class="btn btn-primary">Start bota</button>
+          <button id="stopBotBtn" class="btn btn-danger">Stop bota</button>
+          <button id="validateBtn" class="btn">Waliduj setup</button>
+          <button id="ingestBtn" class="btn">Ingest plikow</button>
+        </div>
+        <pre id="commandOutput" class="console"></pre>
+      </section>
+
+      <section class="card">
+        <h2>Konfiguracja .env</h2>
+        <div class="form-row">
+          <label for="openaiKey">OPENAI_API_KEY</label>
+          <input id="openaiKey" type="password" placeholder="sk-..." />
+        </div>
+        <div class="form-row">
+          <label for="swearingIntensity">SWEARING_INTENSITY</label>
+          <select id="swearingIntensity">
+            <option value="off">off</option>
+            <option value="mild">mild</option>
+            <option value="moderate">moderate</option>
+            <option value="heavy">heavy</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="responseMode">RESPONSE_MODE</label>
+          <select id="responseMode">
+            <option value="manual">manual (tylko po klawiszu f)</option>
+            <option value="gm">gm (odpowiedzi na bezposrednie pytania)</option>
+            <option value="auto">auto (stary autonomiczny tryb)</option>
+          </select>
+        </div>
+        <div class="form-row checkbox-row">
+          <label>
+            <input id="allowSpeakUp" type="checkbox" />
+            ALLOW_PROACTIVE_SPEAK_UP (samodzielne wtracanie sie)
+          </label>
+        </div>
+        <div class="form-row checkbox-row">
+          <label>
+            <input id="enableExtraPlayers" type="checkbox" />
+            ENABLE_ADDITIONAL_AI_PLAYERS (dodatkowi bot-gracze)
+          </label>
+        </div>
+        <div class="actions">
+          <button id="saveEnvBtn" class="btn">Zapisz .env</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Postac (character.json)</h2>
+        <textarea id="characterJson" class="json-editor"></textarea>
+        <div class="actions">
+          <button id="loadCharacterBtn" class="btn">Wczytaj</button>
+          <button id="saveCharacterBtn" class="btn btn-primary">Zapisz</button>
+          <button data-reset="character" class="btn btn-danger resetBtn">Reset</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Osobowosc (player_personality.json)</h2>
+        <textarea id="personalityJson" class="json-editor"></textarea>
+        <div class="actions">
+          <button id="loadPersonalityBtn" class="btn">Wczytaj</button>
+          <button id="savePersonalityBtn" class="btn btn-primary">Zapisz</button>
+          <button data-reset="personality" class="btn btn-danger resetBtn">Reset</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Pliki gry (RAG)</h2>
+        <form id="uploadForm" class="upload-form">
+          <input id="gameFilesInput" type="file" multiple accept=".pdf,.docx,.xlsx" />
+          <button type="submit" class="btn btn-primary">Wyslij pliki</button>
+        </form>
+        <div class="actions">
+          <button data-reset="chroma" class="btn btn-danger resetBtn">Wyczysc Chroma</button>
+        </div>
+        <ul id="gameFilesList" class="list"></ul>
+      </section>
+
+      <section class="card">
+        <h2>Historia sesji</h2>
+        <div class="actions">
+          <button id="reloadSessionsBtn" class="btn">Odswiez sesje</button>
+          <button data-reset="sessions" class="btn btn-danger resetBtn">Usun wszystkie sesje</button>
+        </div>
+        <ul id="sessionsList" class="list"></ul>
+        <pre id="sessionDetails" class="console"></pre>
+      </section>
+
+      <section class="card">
+        <h2>Log procesu bota</h2>
+        <pre id="botLogs" class="console"></pre>
+      </section>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
