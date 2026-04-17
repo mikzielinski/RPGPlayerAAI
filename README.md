@@ -1,113 +1,278 @@
-# RPG AI Player Bot
+```
+╔══════════════════════════════════════════════════════════════════╗
+║                                                                  ║
+║        ⚔   RPG AI PLAYER BOT   ⚔                               ║
+║                                                                  ║
+║   "Nie jestem pewien tej zasady... ale wiem, że spróbuję."      ║
+║                                                                  ║
+╚══════════════════════════════════════════════════════════════════╝
+```
 
-A Python application that acts as a **human-like AI player** at your tabletop RPG table. It listens via microphone, participates in conversation proactively (not only when called), creates or loads its own character, and uses your uploaded game documents as rulebook memory. All spoken output is in **Polish**.
+> A Python application that joins your tabletop RPG session as a **human-like AI player**.
+> It listens via microphone, speaks in Polish, creates its own character, and reacts
+> to dice rolls, plot twists, and group debates — just like a real player would.
 
 ---
 
-## Table of Contents
+## ✦ What it does
 
-- [How it works](#how-it-works)
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [First run — onboarding](#first-run--onboarding)
-- [Starting a session](#starting-a-session)
-- [Adding game documents](#adding-game-documents)
-- [Voices](#voices)
-- [Resetting character or personality](#resetting-character-or-personality)
-- [Project structure](#project-structure)
-- [Troubleshooting](#troubleshooting)
+The bot operates on **two simultaneous layers**, just like a real player:
 
----
-
-## How it works
-
-```
-Startup
-  │
-  ├─ Scan data/game_files/ → build RAG index (skipped if up to date)
-  ├─ Load player_personality.json → if missing: voice interview (Polish)
-  ├─ Load character.json          → if missing: voice interview (Polish)
-  │
-Session loop
-  │
-  ├─ Mic → Whisper STT → rolling buffer (last 15 exchanges)
-  ├─ Classifier (gpt-4o-mini) → WAIT / MY_TURN / SPEAK_UP
-  ├─ if MY_TURN or SPEAK_UP → Agent (gpt-4o) → TTS response
-  └─ Enforce cooldown between proactive interruptions
-```
-
-The bot operates on **two simultaneous layers**:
-
-| Layer | What it is | Example |
+| Layer | Role | Example |
 |---|---|---|
-| **Player layer** | Reacts as a player — to dice rolls, plot twists, group debates | *"Nie spodziewałem się tego."* |
-| **Character layer** | Speaks and acts as the fictional character | *"Aldric milczy i sięga po łuk."* |
+| **Player** | Reacts *as a person at the table* | *"Nie spodziewałem się tego."* |
+| **Character** | Speaks *in-world as the fictional PC* | *"Aldric sięga po łuk i mruży oczy."* |
+
+**Session flow:**
+
+```
+  Mic input
+     │
+     ▼
+  Whisper STT ──► Rolling buffer (last 15 exchanges)
+     │
+     ▼
+  Classifier (gpt-4o-mini) ──► WAIT / MY_TURN / SPEAK_UP
+     │                              │
+     │              ┌───────────────┘
+     ▼              ▼
+  Behavior chain ──► Injects contextual instructions
+     │
+     ▼
+  Agent (gpt-4o) ──► Polish response
+     │
+     ▼
+  Edge TTS ──► Spoken aloud at the table
+```
 
 ---
 
-## Requirements
+## ✦ Requirements
 
-- Python 3.10 or newer
-- A microphone
-- An **OpenAI API key** (`gpt-4o` + `gpt-4o-mini` + `text-embedding-*`)
-- Internet connection (for Edge TTS and OpenAI API)
-- [ffmpeg](https://ffmpeg.org/) installed and available on PATH (required by Whisper)
+| Requirement | Notes |
+|---|---|
+| Python 3.10+ | [python.org](https://python.org) |
+| OpenAI API key | `gpt-4o`, `gpt-4o-mini`, embeddings |
+| ffmpeg | Required by Whisper STT |
+| Microphone | Picks up the whole table |
+| Internet | For Edge TTS and OpenAI (Kokoro TTS works offline) |
 
 ---
 
-## Installation
+## ✦ Quick start
 
-### 1. Clone the repository
+### 1 — Clone
 
 ```bash
 git clone https://github.com/mikzielinski/rpgplayeraai.git
 cd rpgplayeraai
 ```
 
-### 2. Create a virtual environment
+### 2 — Set your API key
 
-```bash
-python -m venv .venv
-source .venv/bin/activate      # Linux / macOS
-.venv\Scripts\activate         # Windows
+Create a `.env` file in the project root:
+
+```
+OPENAI_API_KEY=sk-...
 ```
 
-### 3. Install dependencies
+### 3 — Launch
 
+**macOS / Linux:**
 ```bash
-pip install -r requirements.txt
+./run.sh
 ```
 
-> **Note:** `openai-whisper` downloads model weights on first run (~140 MB for `base`). This is automatic.
-
-### 4. Set your OpenAI API key
-
-```bash
-export OPENAI_API_KEY="sk-..."   # Linux / macOS
-set OPENAI_API_KEY=sk-...        # Windows CMD
-$env:OPENAI_API_KEY="sk-..."     # Windows PowerShell
+**Windows:**
 ```
+run.bat
+```
+
+> The scripts handle everything automatically on first run:
+> virtual environment creation, dependency installation, validation.
+> Just set your key and go.
 
 ---
 
-## Configuration
+## ✦ First run — onboarding
 
-All settings live in `rpg_player/config.py`. Edit directly — no `.env` file needed beyond the API key.
+On first launch the bot has no character and no personality. It will guide you
+through two short voice interviews **entirely in Polish**.
+
+### Step 1 — Personality interview (~2 min)
+
+The bot asks 6 questions to understand how you want it to behave at the table:
+
+1. What player archetype should it be? *(enthusiast / tactician / roleplayer / ...)*
+2. How often should it speak — can it interrupt?
+3. How does it handle being wrong or uncertain?
+4. How should it relate to other players?
+5. What humor level fits — dry, warm, absurd, none?
+6. Are there any behaviors that are absolutely off-limits?
+
+Answers are saved to `rpg_player/data/player_personality.json`. **Asked once, remembered forever.**
+
+### Step 2 — Character creation (~2 min)
+
+The bot asks 5 questions, shaped by the personality it just learned:
+
+1. What kind of game — fantasy, sci-fi, horror, other?
+2. Any class or race in mind, or should it surprise you?
+3. Vibe: dark and gritty, or light and heroic?
+4. Personality traits — sarcastic? noble? cowardly?
+5. Character name, or should the bot pick one?
+
+The bot then introduces itself **in character voice** and saves `rpg_player/data/character.json`.
+**Asked once, remembered forever.**
+
+> On all subsequent runs, both files are loaded instantly and the session begins immediately.
+
+---
+
+## ✦ Adding game documents
+
+Drop rulebooks, modules, and lore files into:
+
+```
+rpg_player/data/game_files/
+```
+
+| Format | Examples |
+|---|---|
+| `.pdf` | Core rulebook, adventure module |
+| `.docx` | House rules, setting lore, NPC list |
+| `.xlsx` | Spell tables, item lists, encounter tables |
+
+The bot indexes everything into a local vector database on startup. If nothing changed
+since the last run, the existing index loads instantly.
+
+When recalling a rule, the bot **always pauses and speaks a filler phrase first** —
+*"Chyba było coś o tym w podręczniku, daj mi chwilę..."* — before returning an answer.
+It never looks instant.
+
+---
+
+## ✦ Live dashboard
+
+Once the session starts, a **Rich terminal dashboard** takes over the screen:
+
+```
+╔══════════════════════════════════════════════════════════════╗
+║  ⚔  RPG AI Player Bot                                       ║
+╠══════════════════════════════════════════════════════════════╣
+║  🎤 LISTENING   Aldric  ·  Half-Elf Ranger Lv.1             ║
+╠══════════════════════╦═══════════════════════════════════════╣
+║  ⚔  Rozmowa         ║  📊  Status sesji                     ║
+║                      ║                                       ║
+║  unknown: Co robimy  ║  Decyzja:    MY_TURN                 ║
+║  unknown: Może lewą  ║  Styl:       Taktyk · umiarkowanie   ║
+║  ▶ Aldric: Czekaj,   ║  Cooldown:   ████████░░ 12s          ║
+║    znam to miejsce.  ║  Zachowania: group_debate, plot_twist ║
+║                      ║  Ostatnia:   Czekaj, znam to miejsce ║
+╠══════════════════════╩═══════════════════════════════════════╣
+║  📋  Dziennik zdarzeń                                        ║
+║  12:34:01  Postać 'Aldric' załadowana                        ║
+║  12:34:05  Sesja aktywna — cooldown: 45s                     ║
+║  12:35:22  Agent wywoływany [MY_TURN]                        ║
+║  12:35:25  Odpowiedź: Czekaj, znam to miejsce...             ║
+╚══════════════════════════════════════════════════════════════╝
+```
+
+**Status indicators:**
+
+| Badge | Meaning |
+|---|---|
+| `🎤 LISTENING` | Microphone active, waiting for speech |
+| `🤔 CLASSIFYING` | Running the fast turn classifier |
+| `🔊 SPEAKING` | TTS playing a response |
+| `⏱ COOLDOWN` | Waiting out the proactive speech cooldown |
+| `📚 INGESTING` | Indexing game documents |
+| `💬 ONBOARDING` | Running a setup interview |
+
+---
+
+## ✦ Behavior system
+
+Behaviors are **modular, pluggable rules** that inject extra instructions into the agent
+before each response. They live in `rpg_player/behaviors/` and are completely independent —
+you can add, remove, or reorder them without touching any other code.
+
+### Built-in behaviors
+
+| File | Behavior | Triggers when... |
+|---|---|---|
+| `dice_reactions.py` | `CriticalHitBehavior` | Buffer mentions nat 20 / critical hit |
+| `dice_reactions.py` | `CriticalFailBehavior` | Buffer mentions nat 1 / fumble |
+| `dice_reactions.py` | `GoodRollBehavior` | Buffer praises a good roll |
+| `plot_reactions.py` | `PlotTwistBehavior` | Buffer contains surprise/revelation language |
+| `plot_reactions.py` | `EmotionalSceneBehavior` | Buffer describes a death or sacrifice |
+| `uncertainty.py` | `RulesUncertaintyBehavior` | Buffer discusses rules or mechanics |
+| `group_dynamics.py` | `GroupDebateBehavior` | Buffer shows group planning or debate |
+| `silence_filler.py` | `SilenceFillerBehavior` | DM asked a question with no response |
+
+### Adding a new behavior
+
+**1.** Create `rpg_player/behaviors/my_behavior.py`:
+
+```python
+from rpg_player.behaviors.base import Behavior, BehaviorContext
+
+class MyBehavior(Behavior):
+    name = "my_behavior"
+
+    def should_trigger(self, ctx: BehaviorContext) -> bool:
+        return "dragon" in ctx.last_utterance.lower()
+
+    def get_instruction(self, ctx: BehaviorContext) -> str:
+        return (
+            "Właśnie pojawił się smok. Twoja postać powinna zareagować "
+            "strachem lub podnieceniem — zgodnie z osobowością."
+        )
+```
+
+**2.** Register it at the bottom of `rpg_player/behaviors/__init__.py`:
+
+```python
+from rpg_player.behaviors.my_behavior import MyBehavior
+DEFAULT_CHAIN.register(MyBehavior())
+```
+
+Done. No other files need to change.
+
+### Building a custom chain
+
+```python
+from rpg_player.behaviors import BehaviorChain
+from rpg_player.behaviors.dice_reactions import CriticalHitBehavior
+from rpg_player.behaviors.my_behavior import MyBehavior
+
+combat_chain = (
+    BehaviorChain()
+    .register(CriticalHitBehavior())
+    .register(MyBehavior())
+)
+```
+
+Pass it to `run_agent(behavior_chain=combat_chain)` or swap `DEFAULT_CHAIN` in `main.py`.
+
+---
+
+## ✦ Configuration
+
+All settings live in `rpg_player/config.py`.
 
 | Setting | Default | Description |
 |---|---|---|
-| `CLASSIFIER_MODEL` | `gpt-4o-mini` | Fast model for deciding when to speak |
-| `AGENT_MODEL` | `gpt-4o` | Full model for generating responses |
-| `WHISPER_MODEL` | `base` | STT model size (`tiny` / `base` / `small` / `medium`) |
-| `SILENCE_THRESHOLD_SEC` | `1.5` | Seconds of silence that end an utterance |
-| `BUFFER_MAX_EXCHANGES` | `15` | Rolling context window size |
-| `SPEAK_UP_COOLDOWN_SEC` | `45` | Default minimum gap between proactive interruptions |
-| `TTS_BACKEND` | `edge` | `"edge"` (online, free) or `"kokoro"` (local, better) |
-| `TTS_VOICE` | `pl-PL-MarekNeural` | Edge TTS voice (see [Voices](#voices)) |
-| `RAG_TIMEOUT_SEC` | `2.5` | Max seconds for a rules lookup before giving up |
+| `CLASSIFIER_MODEL` | `gpt-4o-mini` | Fast model for turn decisions |
+| `AGENT_MODEL` | `gpt-4o` | Full model for responses |
+| `WHISPER_MODEL` | `base` | STT size: `tiny` / `base` / `small` / `medium` |
+| `SILENCE_THRESHOLD_SEC` | `1.5` | Silence gap that ends an utterance |
+| `BUFFER_MAX_EXCHANGES` | `15` | Rolling context window |
+| `TTS_BACKEND` | `edge` | `"edge"` (online) or `"kokoro"` (local) |
+| `TTS_VOICE` | `pl-PL-MarekNeural` | Voice for Edge TTS |
+| `RAG_TIMEOUT_SEC` | `2.5` | Max wait for a rules lookup |
 
-**Cooldown by talk frequency** — automatically applied based on the personality interview answer:
+**Cooldown by talk frequency** — set automatically from the personality interview:
 
 | Personality answer | Cooldown |
 |---|---|
@@ -115,192 +280,106 @@ All settings live in `rpg_player/config.py`. Edit directly — no `.env` file ne
 | `umiarkowanie` | 45 s |
 | `rzadko ale trafnie` | 90 s |
 
----
+### Voices
 
-## First run — onboarding
-
-Run from inside the `rpg_player/` directory:
-
-```bash
-cd rpg_player
-python main.py
-```
-
-### Step 1 — Personality interview
-
-If `data/player_personality.json` does not exist the bot will ask **6 questions in Polish** via TTS. Speak your answers aloud — Whisper captures them.
-
-The questions cover:
-1. What kind of player should the bot be (enthusiast, tactician, roleplayer…)
-2. How often should it speak and whether it can interrupt
-3. How it should handle being wrong or uncertain
-4. How it should relate to other players
-5. What humor level fits the table
-6. What behaviours are absolutely forbidden
-
-After the interview the bot confirms and saves `data/player_personality.json`.
-
-### Step 2 — Character creation
-
-If `data/character.json` does not exist the bot asks **5 questions in Polish** shaped by the personality it just learned:
-
-1. What kind of game — fantasy, sci-fi, horror, other?
-2. Suggested class or race, or should it surprise you?
-3. Tone check — dark and gritty or light and heroic?
-4. Personality traits — sarcastic, noble, cowardly?
-5. Character name, or should the bot pick one?
-
-The bot then introduces the character in voice and saves `data/character.json`.
-
-> **Both files are only created once.** On subsequent runs the bot loads them instantly and goes straight to the session loop.
-
----
-
-## Starting a session
-
-```bash
-cd rpg_player
-python main.py
-```
-
-Once onboarding is done (or skipped because files exist) the bot announces it is ready and begins listening. Place your microphone where it can pick up the whole table.
-
-**The bot will:**
-- Respond immediately when directly addressed by name (`MY_TURN`)
-- Proactively join in when it has something relevant to say (`SPEAK_UP`), respecting the cooldown
-- Stay silent when the conversation is not relevant to it (`WAIT`)
-
-**To stop the session:** press `Ctrl+C`.
-
----
-
-## Adding game documents
-
-Drop `.pdf`, `.docx`, or `.xlsx` files into:
-
-```
-rpg_player/data/game_files/
-```
-
-The bot scans this folder at startup. If new files are detected it re-indexes everything into a local Chroma vector database (`data/chroma_db/`). If nothing changed, the existing index is loaded instantly.
-
-Supported formats:
-
-| Extension | Example use |
+| Voice ID | Character |
 |---|---|
-| `.pdf` | Core rulebook, adventure module |
-| `.docx` | House rules, setting lore, NPC list |
-| `.xlsx` | Spell tables, item lists, encounter tables |
+| `pl-PL-MarekNeural` | Polish male (default) |
+| `pl-PL-ZofiaNeural` | Polish female |
 
-When the bot needs to recall a rule it will **speak a filler phrase first** (e.g. *"Chyba było coś o tym w podręczniku, daj mi chwilę."*) before searching — intentionally human-paced. If the lookup times out it admits uncertainty aloud instead of making something up.
-
----
-
-## Voices
-
-The bot uses **Edge TTS** by default — no installation required beyond `pip install edge-tts`.
-
-| Voice ID | Language | Character |
-|---|---|---|
-| `pl-PL-MarekNeural` | Polish | Male (default) |
-| `pl-PL-ZofiaNeural` | Polish | Female |
-
-To switch voice, edit `config.py`:
-
-```python
-TTS_VOICE = "pl-PL-ZofiaNeural"
-```
-
-### Kokoro TTS (local, higher quality)
-
-For fully offline and better-quality audio:
-
+**Kokoro TTS (local, better quality):**
 ```bash
 pip install kokoro-onnx
+# Place kokoro-v0_19.onnx and voices.json in rpg_player/data/
 ```
+Then set `TTS_BACKEND = "kokoro"` in `config.py`.
 
-Download the model file `kokoro-v0_19.onnx` and `voices.json` and place them in `rpg_player/data/`. Then set:
+---
 
-```python
-TTS_BACKEND = "kokoro"
+## ✦ Resetting
+
+| What to reset | Command |
+|---|---|
+| Character | `rm rpg_player/data/character.json` |
+| Personality | `rm rpg_player/data/player_personality.json` |
+| Game document index | `rm -rf rpg_player/data/chroma_db/` |
+
+---
+
+## ✦ Project structure
+
+```
+rpgplayeraai/
+├── run.sh                       # macOS / Linux launcher (auto-setup)
+├── run.bat                      # Windows launcher (auto-setup)
+├── requirements.txt
+├── .env                         # your OPENAI_API_KEY (not committed)
+└── rpg_player/
+    ├── main.py                  # entry point — startup + session loop
+    ├── config.py                # all tunable constants
+    │
+    ├── behaviors/               # ✦ pluggable behavior system
+    │   ├── __init__.py          #   BehaviorChain + DEFAULT_CHAIN
+    │   ├── base.py              #   Behavior ABC + BehaviorContext
+    │   ├── dice_reactions.py    #   crit hit / fail / good roll
+    │   ├── plot_reactions.py    #   plot twist / emotional scene
+    │   ├── uncertainty.py       #   rules uncertainty framing
+    │   ├── group_dynamics.py    #   group debate participation
+    │   └── silence_filler.py    #   break DM silence
+    │
+    ├── onboarding/
+    │   ├── file_ingest.py       # parse docs → Chroma RAG index
+    │   ├── character_loader.py  # load character.json
+    │   ├── character_creator.py # voice interview → character sheet
+    │   ├── personality_loader.py
+    │   └── personality_creator.py
+    │
+    ├── session/
+    │   ├── listener.py          # Whisper STT + rolling buffer
+    │   ├── classifier.py        # fast LLM: WAIT / MY_TURN / SPEAK_UP
+    │   ├── agent.py             # LangChain two-layer agent
+    │   └── rag.py               # human-paced async RAG lookup
+    │
+    ├── tts/
+    │   └── speaker.py           # Edge TTS / Kokoro abstraction
+    │
+    └── ui/
+        └── dashboard.py         # Rich live terminal dashboard
 ```
 
 ---
 
-## Resetting character or personality
+## ✦ Troubleshooting
 
-To create a new character, delete (or rename) the file and restart:
+**Bot does not speak**
+- Check system audio output is not muted
+- Confirm `edge-tts` installed: `pip install edge-tts`
+- Edge TTS requires internet — check connectivity
 
-```bash
-rm rpg_player/data/character.json
-```
-
-To redo the personality interview:
-
-```bash
-rm rpg_player/data/player_personality.json
-```
-
-To force a full re-index of game documents:
-
-```bash
-rm -rf rpg_player/data/chroma_db/
-```
-
----
-
-## Project structure
-
-```
-rpg_player/
-├── main.py                      # Entry point — startup + session loop
-├── config.py                    # API keys, model names, tunable constants
-├── onboarding/
-│   ├── file_ingest.py           # Parse .docx/.pdf/.xlsx → Chroma RAG index
-│   ├── character_loader.py      # Load character.json
-│   ├── character_creator.py     # Voice interview → generate character sheet
-│   ├── personality_loader.py    # Load player_personality.json
-│   └── personality_creator.py  # Voice interview → generate player personality
-├── session/
-│   ├── listener.py              # Whisper STT + rolling buffer
-│   ├── classifier.py            # Fast LLM: WAIT / MY_TURN / SPEAK_UP
-│   ├── agent.py                 # LangChain agent — two-layer response
-│   └── rag.py                   # Human-paced async RAG lookup
-├── tts/
-│   └── speaker.py               # TTS abstraction (Edge TTS / Kokoro)
-└── data/
-    ├── character.json           # Auto-created on first run
-    ├── player_personality.json  # Auto-created on first run
-    ├── game_files/              # Drop rulebooks here before session
-    └── chroma_db/               # Auto-generated vector index
-```
-
----
-
-## Troubleshooting
-
-**Bot does not speak / TTS silent**
-- Check your system audio output is not muted
-- Confirm `edge-tts` is installed: `pip install edge-tts`
-- Test internet connectivity (Edge TTS requires it)
-
-**Whisper does not transcribe / always empty**
-- Confirm `ffmpeg` is installed: `ffmpeg -version`
-- Try a larger model: set `WHISPER_MODEL = "small"` in `config.py`
-- Check your microphone is the system default input device
+**Whisper doesn't transcribe**
+- Confirm `ffmpeg` installed and on PATH: `ffmpeg -version`
+- Try a larger model: `WHISPER_MODEL = "small"` in `config.py`
+- Check your microphone is the system default input
 
 **OpenAI errors / rate limits**
 - Verify `OPENAI_API_KEY` is set and has credits
-- Reduce cost by switching `AGENT_MODEL = "gpt-4o-mini"` during testing
+- For testing, set `AGENT_MODEL = "gpt-4o-mini"` to reduce cost
 
 **Bot speaks too often or not enough**
-- During personality interview answer the frequency question with `często`, `umiarkowanie`, or `rzadko ale trafnie` — this sets the cooldown automatically
-- Or override directly in `config.py`: `SPEAK_UP_COOLDOWN_SEC = 60`
+- Re-run personality interview: `rm rpg_player/data/player_personality.json`
+- Or override directly: `SPEAK_UP_COOLDOWN_SEC = 60` in `config.py`
 
 **Re-indexing is slow**
 - Only happens when files in `data/game_files/` change
-- Subsequent runs load the existing Chroma index instantly
+- Subsequent runs load the existing index instantly
 
 **Kokoro model not found**
-- Download `kokoro-v0_19.onnx` and `voices.json` manually and place in `rpg_player/data/`
-- Or switch back to Edge TTS: `TTS_BACKEND = "edge"`
+- Download `kokoro-v0_19.onnx` + `voices.json` → place in `rpg_player/data/`
+- Or switch back: `TTS_BACKEND = "edge"`
+
+---
+
+```
+  "Chyba było coś o tym w podręczniku, daj mi chwilę..."
+                                        — Aldric, prawdopodobnie
+```

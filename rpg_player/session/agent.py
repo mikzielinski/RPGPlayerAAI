@@ -85,6 +85,7 @@ def build_agent(
     vectorstore,
     tts,
     trigger_mode: str,
+    behavior_instructions: str = "",
 ) -> AgentExecutor:
     """Construct and return an AgentExecutor for the current turn."""
 
@@ -159,6 +160,8 @@ def build_agent(
     # ----- Build agent -----
 
     system_prompt = _build_system_prompt(personality, character, trigger_mode)
+    if behavior_instructions:
+        system_prompt = system_prompt + "\n" + behavior_instructions
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
@@ -186,9 +189,10 @@ def run_agent(
     tts,
     trigger_mode: str,
     buffer_text: str,
+    behavior_instructions: str = "",
 ) -> str:
     """Build agent for this turn, invoke with buffer context, return response text."""
-    executor = build_agent(personality, character, vectorstore, tts, trigger_mode)
+    executor = build_agent(personality, character, vectorstore, tts, trigger_mode, behavior_instructions)
     result = executor.invoke({
         "input": buffer_text,
         "chat_history": [],
