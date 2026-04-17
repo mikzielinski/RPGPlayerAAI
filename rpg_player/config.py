@@ -9,6 +9,14 @@ _DATA_DIR = os.path.join(_PKG_DIR, "data")
 CLASSIFIER_MODEL = "gpt-4o-mini"
 AGENT_MODEL = "gpt-4o"
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+# Request timeout for OpenAI calls (seconds). Helps avoid hanging requests.
+OPENAI_TIMEOUT_SEC = float(os.environ.get("OPENAI_TIMEOUT_SEC", "35"))
+# Max retries inside OpenAI client/SDK wrappers.
+OPENAI_MAX_RETRIES = int(os.environ.get("OPENAI_MAX_RETRIES", "1"))
+# Fine-grained timeouts/retries for each stage.
+CLASSIFIER_TIMEOUT_SEC = float(os.environ.get("CLASSIFIER_TIMEOUT_SEC", "12"))
+AGENT_TIMEOUT_SEC = float(os.environ.get("AGENT_TIMEOUT_SEC", str(OPENAI_TIMEOUT_SEC)))
+AGENT_MAX_RETRIES = int(os.environ.get("AGENT_MAX_RETRIES", str(OPENAI_MAX_RETRIES)))
 
 # STT
 WHISPER_MODEL = "base"  # or "small" for better accuracy

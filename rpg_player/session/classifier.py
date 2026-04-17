@@ -39,7 +39,11 @@ class Classifier:
     def __init__(self, char_name: str, char_summary: str):
         self._char_name = char_name
         self._char_summary = char_summary
-        self._client = OpenAI(api_key=config.OPENAI_API_KEY)
+        self._client = OpenAI(
+            api_key=config.OPENAI_API_KEY,
+            timeout=config.OPENAI_TIMEOUT_SEC,
+            max_retries=config.OPENAI_MAX_RETRIES,
+        )
 
     def classify(self, buffer_text: str) -> str:
         """Return 'WAIT', 'MY_TURN', or 'SPEAK_UP'."""
@@ -52,14 +56,17 @@ class Classifier:
             buffer_text=buffer_text,
         )
 
-        response = self._client.chat.completions.create(
-            model=config.CLASSIFIER_MODEL,
-            messages=[{"role": "system", "content": system_prompt}],
-            max_tokens=5,
-            temperature=0,
-        )
-
-        decision = response.choices[0].message.content.strip().upper()
-        if decision not in ("WAIT", "MY_TURN", "SPEAK_UP"):
+        try:
+            response = self._client.chat.completions.create(
+                model=config.CLASSIFIER_MODEL,
+                messages=[{"role": "system", "content": system_prompt}],
+                max_tokens=5,
+                temperature=0,
+            )
+            decision = response.choices[0].message.content.strip().upper()
+            if decision not in ("WAIT", "MY_TURN", "SPEAK_UP"):
+                return "WAIT"
+            return decision
+        except Exception:
+            # Fail-safe: never block session loop on classifier/network issues.
             return "WAIT"
-        return decision
