@@ -1,5 +1,6 @@
 const state = {
   lastStatus: null,
+  envFormDirty: false,
 };
 
 async function requestJson(url, options = {}) {
@@ -103,11 +104,13 @@ async function refreshState() {
   renderStatusGrid(status);
   setBotLogs(status.bot?.logs || []);
 
-  const env = status.env || {};
-  document.getElementById("swearingIntensity").value = env.swearing_intensity || "off";
-  document.getElementById("responseMode").value = env.response_mode || "gm";
-  document.getElementById("allowSpeakUp").checked = !!env.allow_proactive_speak_up;
-  document.getElementById("enableExtraPlayers").checked = !!env.enable_additional_ai_players;
+  if (!state.envFormDirty) {
+    const env = status.env || {};
+    document.getElementById("swearingIntensity").value = env.swearing_intensity || "off";
+    document.getElementById("responseMode").value = env.response_mode || "gm";
+    document.getElementById("allowSpeakUp").checked = !!env.allow_proactive_speak_up;
+    document.getElementById("enableExtraPlayers").checked = !!env.enable_additional_ai_players;
+  }
 }
 
 async function loadCharacter() {
@@ -160,6 +163,7 @@ async function saveEnv() {
     method: "POST",
     body: JSON.stringify(payload),
   });
+  state.envFormDirty = false;
   showToast(res.message || "Zapisano");
   document.getElementById("openaiKey").value = "";
   await refreshState();
@@ -228,6 +232,15 @@ async function loadSessionDetails(file) {
 }
 
 function wireEvents() {
+  const markEnvDirty = () => {
+    state.envFormDirty = true;
+  };
+
+  document.getElementById("swearingIntensity").addEventListener("change", markEnvDirty);
+  document.getElementById("responseMode").addEventListener("change", markEnvDirty);
+  document.getElementById("allowSpeakUp").addEventListener("change", markEnvDirty);
+  document.getElementById("enableExtraPlayers").addEventListener("change", markEnvDirty);
+
   document.getElementById("refreshStateBtn").addEventListener("click", async () => {
     await refreshState();
     await loadGameFiles();
