@@ -48,7 +48,7 @@ if errorlevel 1 (
 :: ── Create virtual environment if missing ─────────────────────────────────────
 if not exist .venv (
     echo [^>] Creating virtual environment...
-    python -m venv .venv
+    python -m venv .venv --without-pip
     if errorlevel 1 (
         echo [ERROR] Failed to create virtual environment.
         pause
@@ -62,6 +62,20 @@ if errorlevel 1 (
     echo [ERROR] Could not activate virtual environment.
     pause
     exit /b 1
+)
+
+:: ── Bootstrap pip (handles missing pip in any venv) ──────────────────────────
+python -m pip --version >nul 2>&1
+if errorlevel 1 (
+    echo [^>] Bootstrapping pip...
+    python -m ensurepip --upgrade
+    if errorlevel 1 (
+        echo [ERROR] Could not bootstrap pip.
+        echo         Try: python -m ensurepip --upgrade
+        pause
+        exit /b 1
+    )
+    python -m pip install --upgrade pip --quiet
 )
 
 :: ── Install / update dependencies ─────────────────────────────────────────────
@@ -81,8 +95,8 @@ if "!NEEDS_INSTALL!"=="0" (
 
 if "!NEEDS_INSTALL!"=="1" (
     echo [^>] Installing dependencies (first run may take several minutes^^^)...
-    pip install --upgrade pip --quiet
-    pip install -r requirements.txt --quiet
+    python -m pip install --upgrade pip --quiet
+    python -m pip install -r requirements.txt --quiet
     if errorlevel 1 (
         echo [ERROR] Dependency installation failed.
         echo         Check your internet connection and try again.

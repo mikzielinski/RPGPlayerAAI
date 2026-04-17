@@ -58,11 +58,18 @@ fi
 # ── Create virtual environment if missing ──────────────────────────────────────
 if [ ! -d ".venv" ]; then
     info "Creating virtual environment..."
-    python3 -m venv .venv
+    python3 -m venv .venv --without-pip
     ok "Virtual environment created"
 fi
 
 source .venv/bin/activate
+
+# ── Bootstrap pip (handles missing pip in any venv) ────────────────────────────
+if ! python3 -m pip --version &>/dev/null; then
+    info "Bootstrapping pip..."
+    python3 -m ensurepip --upgrade || fail "Could not bootstrap pip.\nTry: python3 -m ensurepip --upgrade"
+    python3 -m pip install --upgrade pip --quiet
+fi
 
 # ── Install / update dependencies ─────────────────────────────────────────────
 STAMP=".venv/.install_stamp"
@@ -73,8 +80,8 @@ NEEDS_INSTALL=0
 
 if [ "$NEEDS_INSTALL" -eq 1 ]; then
     info "Installing dependencies (first run may take a few minutes)..."
-    pip install --upgrade pip --quiet
-    pip install -r requirements.txt --quiet
+    python3 -m pip install --upgrade pip --quiet
+    python3 -m pip install -r requirements.txt --quiet
     touch "$STAMP"
     ok "Dependencies installed"
 else
