@@ -148,9 +148,47 @@ if [ $? -ne 0 ]; then
 fi
 
 # ── Launch ─────────────────────────────────────────────────────────────────────
-echo ""
-echo -e "${BOLD}${GREEN}Setup complete. Starting session...${RESET}"
-echo -e "  ${DIM}Press Ctrl+C to end the session.${RESET}"
-echo ""
+MODE_ARG="${1:-}"
+LAUNCH_MODE=""
 
-python3 -m rpg_player.main
+case "$MODE_ARG" in
+    web|--web)
+        LAUNCH_MODE="web"
+        ;;
+    cli|--cli|"")
+        LAUNCH_MODE=""
+        ;;
+    *)
+        warn "Unknown mode '$MODE_ARG' (expected: cli|web). Falling back to interactive choice."
+        ;;
+esac
+
+if [ -z "$LAUNCH_MODE" ]; then
+    echo ""
+    echo -e "${BOLD}Choose launch mode:${RESET}"
+    echo "  1) CLI session (terminal dashboard)"
+    echo "  2) Web panel (HTML interface)"
+    read -r -p "Select [1/2] (default 1): " MODE_CHOICE
+    if [ "$MODE_CHOICE" = "2" ]; then
+        LAUNCH_MODE="web"
+    else
+        LAUNCH_MODE="cli"
+    fi
+fi
+
+if [ "$LAUNCH_MODE" = "web" ]; then
+    WEB_HOST="${RPG_WEB_HOST:-0.0.0.0}"
+    WEB_PORT="${RPG_WEB_PORT:-8080}"
+    echo ""
+    echo -e "${BOLD}${GREEN}Setup complete. Starting web panel...${RESET}"
+    echo -e "  ${DIM}Open: http://localhost:${WEB_PORT}${RESET}"
+    echo -e "  ${DIM}Press Ctrl+C to stop.${RESET}"
+    echo ""
+    python3 -m rpg_player.webapp
+else
+    echo ""
+    echo -e "${BOLD}${GREEN}Setup complete. Starting session...${RESET}"
+    echo -e "  ${DIM}Press Ctrl+C to end the session.${RESET}"
+    echo ""
+    python3 -m rpg_player.main
+fi
