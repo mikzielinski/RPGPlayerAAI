@@ -108,6 +108,70 @@ def _personality_info(personality: dict) -> str:
     )
 
 
+def _is_direct_question_to_character(buffer: list[dict], char_name: str) -> bool:
+    """Heuristic: last non-bot utterance is a direct question to this character."""
+    if not buffer:
+        return False
+
+    last = buffer[-1]
+    speaker = str(last.get("speaker", "")).strip().lower()
+    text = str(last.get("text", "")).strip().lower()
+    name = char_name.lower()
+    if not text or speaker == name:
+        return False
+    if "?" not in text:
+        return False
+
+    if name in text:
+        return True
+
+    direct_phrases = (
+        "twoja kolej",
+        "twoj ruch",
+        "co robisz",
+        "co zamierzasz",
+        "co chcesz zrobic",
+    )
+    return any(phrase in text for phrase in direct_phrases)
+
+
+def _resolve_decision(
+    player: BotPlayer,
+    buffer: list[dict],
+    buffer_text: str,
+    force_turn: bool,
+    mode: str,
+) -> tuple[str, bool]:
+    """Return (decision, was_forced)."""
+    if force_turn:
+        player.consecutive_wait = 0
+        return "MY_TURN", True
+
+    if mode == "manual":
+        return "WAIT", False
+
+    if mode == "gm":
+        char_name = player.character.get("name", "Postac")
+        if _is_direct_question_to_character(buffer, char_name):
+            player.consecutive_wait = 0
+            return "MY_TURN", False
+        return "WAIT", False
+
+    # mode == "auto" (legacy behavior)
+    decision = player.classifier.classify(buffer_text)
+    if decision == "WAIT":
+        player.consecutive_wait += 1
+        if (
+            player.consecutive_wait >= config.CONSECUTIVE_WAIT_FORCE_THRESHOLD
+            and buffer_text.rstrip().endswith("?")
+        ):
+            player.consecutive_wait = 0
+            return "MY_TURN", True
+    else:
+        player.consecutive_wait = 0
+    return decision, False
+
+
 def _ask_continue_session(session_memory: SessionMemory) -> dict | None:
     """Print a prompt and return the previous session dict or None."""
     latest = session_memory.load_latest()
@@ -139,6 +203,7 @@ def _process_bot_turn(
     force_turn: bool = False,
 ) -> None:
     """Classify and optionally respond for one BotPlayer. Mutates player state."""
+    buf = listener.get_buffer()
     buffer_text = listener.get_buffer_text()
     if not buffer_text.strip():
         return
@@ -148,37 +213,32 @@ def _process_bot_turn(
     cooldown_remaining = max(0.0, player.cooldown_sec - (now - player.last_speak_up_time))
     speak_up_blocked = cooldown_remaining > 0
 
+    decision, was_forced = _resolve_decision(
+        player=player,
+        buffer=buf,
+        buffer_text=buffer_text,
+        force_turn=force_turn,
+        mode=config.RESPONSE_MODE,
+    )
     if force_turn:
-        decision = "MY_TURN"
-        player.consecutive_wait = 0
         dash.log(f"[yellow]{char_name}: wymuszona odpowiedz (klawisz f)[/yellow]")
-    else:
-        decision = player.classifier.classify(buffer_text)
-
-        if decision == "WAIT":
-            player.consecutive_wait += 1
-            # After N WAITs on a direct question, override to MY_TURN
-            if (
-                player.consecutive_wait >= config.CONSECUTIVE_WAIT_FORCE_THRESHOLD
-                and buffer_text.rstrip().endswith("?")
-            ):
-                decision = "MY_TURN"
-                player.consecutive_wait = 0
-                dash.log(
-                    f"[yellow]{char_name}: wymuszona odpowiedz po "
-                    f"{config.CONSECUTIVE_WAIT_FORCE_THRESHOLD} WAITs[/yellow]"
-                )
-        else:
-            player.consecutive_wait = 0
+    elif was_forced and config.RESPONSE_MODE == "auto":
+        dash.log(
+            f"[yellow]{char_name}: wymuszona odpowiedz po "
+            f"{config.CONSECUTIVE_WAIT_FORCE_THRESHOLD} WAITs[/yellow]"
+        )
 
     if decision == "WAIT":
+        return
+
+    if decision == "SPEAK_UP" and not config.ALLOW_PROACTIVE_SPEAK_UP:
+        dash.log(f"[dim]{char_name}: SPEAK_UP zablokowany (tryb kontrolowany)[/dim]")
         return
 
     if decision == "SPEAK_UP" and speak_up_blocked:
         return
 
     # Behavior chain
-    buf = listener.get_buffer()
     last_utterance = buf[-1]["text"] if buf else ""
     ctx = BehaviorContext(
         buffer=buf,
@@ -299,25 +359,28 @@ def main() -> None:
         cooldown_sec=cooldown_sec,
     )
 
-    # 5. Additional players from config
+    # 5. Additional players from config (guarded by explicit opt-in)
     extra_players: list[BotPlayer] = []
-    for p_cfg in config.ADDITIONAL_PLAYERS:
-        try:
-            p_personality = json.loads(Path(p_cfg["personality_file"]).read_text(encoding="utf-8"))
-            p_character = json.loads(Path(p_cfg["character_file"]).read_text(encoding="utf-8"))
-            p_name = p_character.get("name", "Postac2")
-            p_freq = p_personality.get("talk_frequency", "umiarkowanie")
-            p_cooldown = config.COOLDOWN_BY_FREQUENCY.get(p_freq, config.SPEAK_UP_COOLDOWN_SEC)
-            extra_players.append(BotPlayer(
-                personality=p_personality,
-                character=p_character,
-                classifier=Classifier(char_name=p_name, char_summary=_char_summary(p_character)),
-                token_tracker=TokenTracker(),
-                cooldown_sec=p_cooldown,
-            ))
-            dash.log(f"Dodatkowy gracz AI: {p_name}")
-        except Exception as e:
-            dash.log(f"[red]Blad ladowania dodatkowego gracza: {e}[/red]")
+    if config.ENABLE_ADDITIONAL_AI_PLAYERS:
+        for p_cfg in config.ADDITIONAL_PLAYERS:
+            try:
+                p_personality = json.loads(Path(p_cfg["personality_file"]).read_text(encoding="utf-8"))
+                p_character = json.loads(Path(p_cfg["character_file"]).read_text(encoding="utf-8"))
+                p_name = p_character.get("name", "Postac2")
+                p_freq = p_personality.get("talk_frequency", "umiarkowanie")
+                p_cooldown = config.COOLDOWN_BY_FREQUENCY.get(p_freq, config.SPEAK_UP_COOLDOWN_SEC)
+                extra_players.append(BotPlayer(
+                    personality=p_personality,
+                    character=p_character,
+                    classifier=Classifier(char_name=p_name, char_summary=_char_summary(p_character)),
+                    token_tracker=TokenTracker(),
+                    cooldown_sec=p_cooldown,
+                ))
+                dash.log(f"Dodatkowy gracz AI: {p_name}")
+            except Exception as e:
+                dash.log(f"[red]Blad ladowania dodatkowego gracza: {e}[/red]")
+    elif config.ADDITIONAL_PLAYERS:
+        dash.log("[dim]ADDITIONAL_PLAYERS skonfigurowane, ale wylaczone (ENABLE_ADDITIONAL_AI_PLAYERS=0).[/dim]")
 
     all_players = [primary_player] + extra_players
 
@@ -337,7 +400,10 @@ def main() -> None:
     tts.speak(f"Gotowy. Jestem {char_name}. Zaczynamy sesje.")
     dash.update(status="LISTENING")
     dash.log(f"Sesja aktywna — {char_name} · cooldown: {cooldown_sec}s")
-    dash.log("[dim]Klawisze: [f] wymus odpowiedz · [v] zmien glos · [q] zakoncz[/dim]")
+    dash.log(
+        "[dim]Klawisze: [f] wymus odpowiedz · [v] zmien glos · [q] zakoncz | "
+        f"tryb: {config.RESPONSE_MODE}[/dim]"
+    )
 
     try:
         while True:

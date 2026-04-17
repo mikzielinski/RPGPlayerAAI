@@ -92,6 +92,29 @@ run.bat
 > virtual environment creation, dependency installation, validation.
 > Just set your key and go.
 
+### 4 — Optional web control panel (HTML)
+
+If you prefer controlling the bot through a browser:
+
+```bash
+python3 -m rpg_player.webapp
+```
+
+Then open:
+
+```
+http://localhost:8080
+```
+
+The panel lets you:
+- start/stop the bot process,
+- edit `character.json` and `player_personality.json`,
+- upload/delete RAG game files and trigger ingest,
+- change runtime behavior mode:
+  - `manual` — bot speaks only after `f`,
+  - `gm` — bot responds only when directly addressed,
+  - `auto` — legacy autonomous behavior.
+
 ---
 
 ## ✦ First run — onboarding

@@ -163,14 +163,49 @@ if errorlevel 1 (
 )
 
 :: ── Launch ────────────────────────────────────────────────────────────────────
-echo.
-echo  ==========================================
-echo    Setup complete. Starting session...
-echo    Press Ctrl+C to stop.
-echo  ==========================================
-echo.
+set "MODE_ARG=%~1"
+set "LAUNCH_MODE="
 
-python -m rpg_player.main
+if /i "%MODE_ARG%"=="web" set "LAUNCH_MODE=web"
+if /i "%MODE_ARG%"=="--web" set "LAUNCH_MODE=web"
+if /i "%MODE_ARG%"=="cli" set "LAUNCH_MODE=cli"
+if /i "%MODE_ARG%"=="--cli" set "LAUNCH_MODE=cli"
+
+if "%LAUNCH_MODE%"=="" (
+    echo.
+    echo  Choose launch mode:
+    echo    [1] CLI session (terminal dashboard)
+    echo    [2] Web panel (HTML interface)
+    set /p "MODE_CHOICE=  Select [1/2] (default 1): "
+    if "%MODE_CHOICE%"=="2" (
+        set "LAUNCH_MODE=web"
+    ) else (
+        set "LAUNCH_MODE=cli"
+    )
+)
+
+if /i "%LAUNCH_MODE%"=="web" (
+    if "%RPG_WEB_HOST%"=="" set "RPG_WEB_HOST=0.0.0.0"
+    if "%RPG_WEB_PORT%"=="" set "RPG_WEB_PORT=8080"
+    echo.
+    echo  ==========================================
+    echo    Setup complete. Starting web panel...
+    echo    Open: http://localhost:%RPG_WEB_PORT%
+    echo    Press Ctrl+C to stop.
+    echo  ==========================================
+    echo.
+
+    python -m rpg_player.webapp
+) else (
+    echo.
+    echo  ==========================================
+    echo    Setup complete. Starting session...
+    echo    Press Ctrl+C to stop.
+    echo  ==========================================
+    echo.
+
+    python -m rpg_player.main
+)
 
 echo.
 echo  Session ended. Press any key to close.

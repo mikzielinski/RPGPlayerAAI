@@ -68,7 +68,7 @@ def ingest_game_files(
 
     files = [p for p in game_path.iterdir() if p.suffix.lower() in _SUPPORTED]
     if not files:
-        print("[ingest] Brak plików gry w data/game_files/ — pomijam indeksowanie.")
+        print("[ingest] Brak plikow gry w data/game_files/ - pomijam indeksowanie.")
         return None
 
     mtime_cache = _load_mtime_cache()
@@ -77,7 +77,7 @@ def ingest_game_files(
     embeddings = OpenAIEmbeddings(openai_api_key=config.OPENAI_API_KEY)
 
     if chroma_path.exists() and not _files_changed(game_path, mtime_cache):
-        print("[ingest] Baza wektorowa aktualna — wczytuję istniejącą.")
+        print("[ingest] Baza wektorowa aktualna - wczytuje istniejaca.")
         return Chroma(persist_directory=str(chroma_path), embedding_function=embeddings)
 
     print("[ingest] Indeksuję pliki gry...")
@@ -85,7 +85,7 @@ def ingest_game_files(
     new_cache: dict[str, float] = {}
 
     for file_path in files:
-        print(f"  → {file_path.name}")
+        print(f"  -> {file_path.name}")
         loader = _loader_for(file_path)
         docs = loader.load()
         all_docs.extend(docs)
