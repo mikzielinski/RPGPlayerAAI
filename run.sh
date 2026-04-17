@@ -148,5 +148,4 @@ echo -e "  ${DIM}Drop game files into: rpg_player/data/game_files/"
 echo -e "  Press Ctrl+C to end the session.${RESET}"
 echo ""
 
-cd rpg_player
-python3 main.py
+python3 -m rpg_player.main

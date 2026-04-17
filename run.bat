@@ -164,8 +164,7 @@ echo    Press Ctrl+C to stop.
 echo  ==========================================
 echo.
 
-cd rpg_player
-python main.py
+python -m rpg_player.main
 
 echo.
 echo  Session ended. Press any key to close.

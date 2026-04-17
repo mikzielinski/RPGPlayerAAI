@@ -1,5 +1,10 @@
 import os
 
+# Absolute path to the rpg_player/ package directory — used to anchor all data paths
+# so the bot works regardless of which directory it is launched from.
+_PKG_DIR = os.path.dirname(os.path.abspath(__file__))
+_DATA_DIR = os.path.join(_PKG_DIR, "data")
+
 # LLM
 CLASSIFIER_MODEL = "gpt-4o-mini"
 AGENT_MODEL = "gpt-4o"
@@ -19,11 +24,11 @@ MAX_CREATION_QUESTIONS = 5
 TTS_BACKEND = "edge"
 TTS_VOICE = "pl-PL-MarekNeural"  # Polish male; alternative: pl-PL-ZofiaNeural (female)
 
-# Paths
-CHARACTER_FILE = "data/character.json"
-PERSONALITY_FILE = "data/player_personality.json"
-GAME_FILES_DIR = "data/game_files/"
-CHROMA_DIR = "data/chroma_db/"
+# Paths (absolute, anchored to rpg_player/data/)
+CHARACTER_FILE = os.path.join(_DATA_DIR, "character.json")
+PERSONALITY_FILE = os.path.join(_DATA_DIR, "player_personality.json")
+GAME_FILES_DIR = os.path.join(_DATA_DIR, "game_files")
+CHROMA_DIR = os.path.join(_DATA_DIR, "chroma_db")
 
 # Cooldown overrides keyed by talk_frequency value from personality JSON
 COOLDOWN_BY_FREQUENCY = {
