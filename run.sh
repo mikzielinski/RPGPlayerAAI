@@ -98,7 +98,7 @@ else
 fi
 
 # ── Step 4 — API key ──────────────────────────────────────────────────────────
-step "4/5" "OpenAI API key"
+step "4/6" "OpenAI API key"
 
 if [ -z "${OPENAI_API_KEY:-}" ]; then
     echo ""
@@ -132,7 +132,7 @@ fi
 ok "OPENAI_API_KEY set"
 
 # ── Step 5 — Validate connection ──────────────────────────────────────────────
-step "5/5" "Validating connection"
+step "5/6" "Validating connection"
 python3 scripts/validate_setup.py
 VALIDATE_EXIT=$?
 if [ "$VALIDATE_EXIT" -ne 0 ]; then
@@ -140,12 +140,17 @@ if [ "$VALIDATE_EXIT" -ne 0 ]; then
     fail "Validation failed — fix the errors above and run again."
 fi
 
+# ── Step 6 — Game files ───────────────────────────────────────────────────────
+step "6/6" "Game documents"
+python3 scripts/setup_game_files.py
+if [ $? -ne 0 ]; then
+    fail "Game file setup failed unexpectedly."
+fi
+
 # ── Launch ─────────────────────────────────────────────────────────────────────
-mkdir -p rpg_player/data/game_files
 echo ""
 echo -e "${BOLD}${GREEN}Setup complete. Starting session...${RESET}"
-echo -e "  ${DIM}Drop game files into: rpg_player/data/game_files/"
-echo -e "  Press Ctrl+C to end the session.${RESET}"
+echo -e "  ${DIM}Press Ctrl+C to end the session.${RESET}"
 echo ""
 
 python3 -m rpg_player.main

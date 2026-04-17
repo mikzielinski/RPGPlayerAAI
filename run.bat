@@ -111,8 +111,8 @@ if "!NEEDS_INSTALL!"=="1" (
 )
 echo.
 
-:: ── Step 4/5 — API key ────────────────────────────────────────────────────────
-echo [4/5] OpenAI API key
+:: ── Step 4/6 — API key ────────────────────────────────────────────────────────
+echo [4/6] OpenAI API key
 
 if "!OPENAI_API_KEY!"=="" (
     echo.
@@ -142,8 +142,8 @@ if "!OPENAI_API_KEY!"=="" (
 echo   [OK]  OPENAI_API_KEY set
 echo.
 
-:: ── Step 5/5 — Validate connection ───────────────────────────────────────────
-echo [5/5] Validating connection
+:: ── Step 5/6 — Validate connection ───────────────────────────────────────────
+echo [5/6] Validating connection
 echo.
 python scripts\validate_setup.py
 if errorlevel 1 (
@@ -152,14 +152,20 @@ if errorlevel 1 (
     pause & exit /b 1
 )
 
-:: ── Launch ────────────────────────────────────────────────────────────────────
-if not exist rpg_player\data\game_files mkdir rpg_player\data\game_files
+:: ── Step 6/6 — Game files ─────────────────────────────────────────────────────
+echo.
+echo [6/6] Game documents
+echo.
+python scripts\setup_game_files.py
+if errorlevel 1 (
+    echo   [ERROR] Game file setup failed unexpectedly.
+    pause & exit /b 1
+)
 
+:: ── Launch ────────────────────────────────────────────────────────────────────
 echo.
 echo  ==========================================
 echo    Setup complete. Starting session...
-echo    Drop game files into:
-echo      rpg_player\data\game_files\
 echo    Press Ctrl+C to stop.
 echo  ==========================================
 echo.
