@@ -1,61 +1,67 @@
 #!/usr/bin/env bash
 # RPG AI Player Bot — macOS / Linux launcher
-# Handles full setup on first run: venv creation, dependency install, validation.
+# Full auto-setup: venv, deps, API key prompt, connection validation.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# ── Colors ─────────────────────────────────────────────────────────────────────
+# ── Colours ────────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'
-CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
+CYAN='\033[0;36m'; BOLD='\033[1m'; DIM='\033[2m'; RESET='\033[0m'
 
-ok()   { echo -e "${GREEN}✓${RESET} $*"; }
-info() { echo -e "${CYAN}→${RESET} $*"; }
-warn() { echo -e "${YELLOW}⚠${RESET} $*"; }
-fail() { echo -e "${RED}✖ ERROR:${RESET} $*" >&2; exit 1; }
+ok()     { echo -e "  ${GREEN}✓${RESET}  $*"; }
+info()   { echo -e "  ${CYAN}→${RESET}  $*"; }
+warn()   { echo -e "  ${YELLOW}⚠${RESET}  $*"; }
+fail()   { echo -e "\n  ${RED}✖  ERROR:${RESET} $*\n" >&2; exit 1; }
+step()   { echo -e "\n${BOLD}${CYAN}[$1]${RESET}${BOLD} $2${RESET}"; }
 
 echo ""
-echo -e "${BOLD}${CYAN}╔══════════════════════════════════════╗"
-echo -e "║       RPG AI Player Bot              ║"
-echo -e "╚══════════════════════════════════════╝${RESET}"
+echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════╗"
+echo -e "║   ⚔   RPG AI Player Bot  — Setup      ║"
+echo -e "╚══════════════════════════════════════════╝${RESET}"
 echo ""
 
-# ── Load .env ──────────────────────────────────────────────────────────────────
+# ── Step 1 — Load .env ────────────────────────────────────────────────────────
+step "1/5" "Loading environment"
 if [ -f .env ]; then
-    info "Loading .env file..."
     set -a
     # shellcheck disable=SC1091
     source .env
     set +a
     ok ".env loaded"
+else
+    info "No .env file found — will check for API key below"
 fi
 
-# ── Check Python 3.10+ ─────────────────────────────────────────────────────────
-info "Checking Python version..."
+# ── Step 2 — System checks ────────────────────────────────────────────────────
+step "2/5" "System checks"
+
+# Python
 if ! command -v python3 &>/dev/null; then
-    fail "python3 not found.\nInstall Python 3.10+ from https://python.org"
+    fail "python3 not found.\n  Install Python 3.10+ from https://python.org"
 fi
-
 PYTHON_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-PYTHON_MAJOR=$(echo "$PYTHON_VER" | cut -d. -f1)
-PYTHON_MINOR=$(echo "$PYTHON_VER" | cut -d. -f2)
-
-if [ "$PYTHON_MAJOR" -lt 3 ] || { [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 10 ]; }; then
-    fail "Python 3.10+ required — found $PYTHON_VER\nInstall from https://python.org"
+PMAJOR=$(echo "$PYTHON_VER" | cut -d. -f1)
+PMINOR=$(echo "$PYTHON_VER" | cut -d. -f2)
+if [ "$PMAJOR" -lt 3 ] || { [ "$PMAJOR" -eq 3 ] && [ "$PMINOR" -lt 10 ]; }; then
+    fail "Python 3.10+ required — found $PYTHON_VER\n  Install from https://python.org"
 fi
 ok "Python $PYTHON_VER"
 
-# ── Check ffmpeg (needed by Whisper) ───────────────────────────────────────────
-if ! command -v ffmpeg &>/dev/null; then
-    warn "ffmpeg not found — Whisper STT will not work."
-    echo "  Install: brew install ffmpeg  (macOS)"
-    echo "           sudo apt install ffmpeg  (Ubuntu/Debian)"
-    echo "           sudo dnf install ffmpeg  (Fedora)"
-    echo ""
+# ffmpeg
+if command -v ffmpeg &>/dev/null; then
+    ok "ffmpeg found"
+else
+    warn "ffmpeg not found — Whisper STT will not work"
+    echo -e "       ${DIM}Install: brew install ffmpeg  (macOS)"
+    echo -e "                sudo apt install ffmpeg  (Ubuntu)"
+    echo -e "                sudo dnf install ffmpeg  (Fedora)${RESET}"
 fi
 
-# ── Create virtual environment if missing ──────────────────────────────────────
+# ── Step 3 — Virtual environment & dependencies ───────────────────────────────
+step "3/5" "Python environment"
+
 if [ ! -d ".venv" ]; then
     info "Creating virtual environment..."
     python3 -m venv .venv --without-pip
@@ -64,46 +70,83 @@ fi
 
 source .venv/bin/activate
 
-# ── Bootstrap pip (handles missing pip in any venv) ────────────────────────────
+# Bootstrap pip if missing
 if ! python3 -m pip --version &>/dev/null; then
     info "Bootstrapping pip..."
-    python3 -m ensurepip --upgrade || fail "Could not bootstrap pip.\nTry: python3 -m ensurepip --upgrade"
+    python3 -m ensurepip --upgrade \
+        || fail "Could not bootstrap pip.\n  Try: python3 -m ensurepip --upgrade"
     python3 -m pip install --upgrade pip --quiet
+    ok "pip bootstrapped"
 fi
 
-# ── Install / update dependencies ─────────────────────────────────────────────
+# Install / update dependencies
 STAMP=".venv/.install_stamp"
 NEEDS_INSTALL=0
-
 [ ! -f "$STAMP" ] && NEEDS_INSTALL=1
-[ -f "$STAMP" ] && [ requirements.txt -nt "$STAMP" ] && NEEDS_INSTALL=1
+{ [ -f "$STAMP" ] && [ requirements.txt -nt "$STAMP" ]; } && NEEDS_INSTALL=1
 
 if [ "$NEEDS_INSTALL" -eq 1 ]; then
-    info "Installing dependencies (first run may take a few minutes)..."
+    info "Installing dependencies — pip will show progress below..."
+    echo ""
     python3 -m pip install --upgrade pip --quiet
-    python3 -m pip install -r requirements.txt --quiet
+    python3 -m pip install -r requirements.txt
+    echo ""
     touch "$STAMP"
-    ok "Dependencies installed"
+    ok "All dependencies installed"
 else
     ok "Dependencies up to date"
 fi
 
-# ── Validate OpenAI API key ────────────────────────────────────────────────────
+# ── Step 4 — API key ──────────────────────────────────────────────────────────
+step "4/5" "OpenAI API key"
+
 if [ -z "${OPENAI_API_KEY:-}" ]; then
     echo ""
-    fail "OPENAI_API_KEY is not set.\n\nCreate a .env file in this directory:\n  echo 'OPENAI_API_KEY=sk-...' > .env\n\nOr export it in your shell before running."
-fi
-ok "OPENAI_API_KEY found"
+    warn "OPENAI_API_KEY is not set."
+    echo -e "  ${DIM}Get your key from: https://platform.openai.com/api-keys${RESET}"
+    echo ""
 
-# ── Ensure data directories exist ─────────────────────────────────────────────
-mkdir -p rpg_player/data/game_files
+    # Prompt (hidden input)
+    read -r -s -p "  Enter your OpenAI API key: " OPENAI_API_KEY
+    echo ""
+
+    if [ -z "$OPENAI_API_KEY" ]; then
+        fail "No key entered."
+    fi
+
+    export OPENAI_API_KEY
+
+    # Offer to persist it
+    echo ""
+    read -r -p "  Save key to .env for future runs? [Y/n]: " SAVE_KEY
+    if [[ -z "$SAVE_KEY" || "$SAVE_KEY" =~ ^[Yy] ]]; then
+        # Preserve any existing non-key lines
+        if [ -f .env ]; then
+            grep -v "^OPENAI_API_KEY=" .env > .env.tmp && mv .env.tmp .env || true
+        fi
+        echo "OPENAI_API_KEY=$OPENAI_API_KEY" >> .env
+        ok "Key saved to .env"
+    fi
+fi
+
+ok "OPENAI_API_KEY set"
+
+# ── Step 5 — Validate connection ──────────────────────────────────────────────
+step "5/5" "Validating connection"
+python3 scripts/validate_setup.py
+VALIDATE_EXIT=$?
+if [ "$VALIDATE_EXIT" -ne 0 ]; then
+    echo ""
+    fail "Validation failed — fix the errors above and run again."
+fi
 
 # ── Launch ─────────────────────────────────────────────────────────────────────
+mkdir -p rpg_player/data/game_files
 echo ""
-echo -e "${BOLD}Starting session...${RESET}"
-echo "Drop game PDFs / DOCX files into:  rpg_player/data/game_files/"
-echo "Press Ctrl+C to end the session."
+echo -e "${BOLD}${GREEN}Setup complete. Starting session...${RESET}"
+echo -e "  ${DIM}Drop game files into: rpg_player/data/game_files/"
+echo -e "  Press Ctrl+C to end the session.${RESET}"
 echo ""
 
 cd rpg_player
-python main.py
+python3 main.py
