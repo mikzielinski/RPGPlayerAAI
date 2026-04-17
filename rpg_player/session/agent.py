@@ -2,12 +2,16 @@
 
 Uses bind_tools + manual tool-calling loop instead of AgentExecutor so it
 works with any LangChain 0.2/0.3+ version without breaking on internal moves.
+
+Token usage is extracted from response.response_metadata and forwarded to
+an optional TokenTracker so the main loop can warn the user.
 """
 from __future__ import annotations
 
 import asyncio
 import random
 import re
+from typing import Optional
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
@@ -16,7 +20,7 @@ from langchain_openai import ChatOpenAI
 from rpg_player import config
 from rpg_player.session import rag as rag_module
 
-_MAX_TOOL_ROUNDS = 5  # prevent runaway tool-call loops
+_MAX_TOOL_ROUNDS = 5
 
 _SYSTEM_TEMPLATE = """=== WARSTWA GRACZA ===
 Jesteś graczem przy stole RPG. Twój styl bycia przy stole:
@@ -48,8 +52,14 @@ Tryb wyzwolenia: {trigger_mode}
 - SPEAK_UP: wejdź naturalnie — zacznij od "Czekaj—", "Właściwie...", "Hej, a co jeśli..." albo wskocz w połowie myśli"""
 
 
-def _build_system_prompt(personality: dict, character: dict, trigger_mode: str) -> str:
-    return _SYSTEM_TEMPLATE.format(
+def _build_system_prompt(
+    personality: dict,
+    character: dict,
+    trigger_mode: str,
+    session_context: str = "",
+    known_players: Optional[list[str]] = None,
+) -> str:
+    base = _SYSTEM_TEMPLATE.format(
         table_archetype=personality.get("table_archetype", "neutralny"),
         talk_frequency=personality.get("talk_frequency", "umiarkowanie"),
         mistake_reaction=personality.get("mistake_reaction", "przyznam otwarcie"),
@@ -65,6 +75,11 @@ def _build_system_prompt(personality: dict, character: dict, trigger_mode: str) 
         signature_phrases=", ".join(character.get("signature_phrases", [])),
         trigger_mode=trigger_mode,
     )
+    if known_players:
+        base += f"\n\nGracze przy stole (znane imiona): {', '.join(known_players)}"
+    if session_context:
+        base += "\n\n" + session_context
+    return base
 
 
 def _parse_dice(notation: str) -> tuple[int, int, int]:
@@ -137,6 +152,20 @@ def _make_tools(character: dict, vectorstore, tts):
     return [roll_dice, check_character_sheet, lookup_rules]
 
 
+def _track_tokens(response: AIMessage, token_tracker) -> None:
+    """Extract token usage from response metadata and add to tracker."""
+    if token_tracker is None:
+        return
+    try:
+        usage = (getattr(response, "response_metadata", None) or {}).get("token_usage", {})
+        token_tracker.add(
+            prompt_tokens=int(usage.get("prompt_tokens", 0)),
+            completion_tokens=int(usage.get("completion_tokens", 0)),
+        )
+    except Exception:
+        pass
+
+
 def run_agent(
     personality: dict,
     character: dict,
@@ -145,9 +174,16 @@ def run_agent(
     trigger_mode: str,
     buffer_text: str,
     behavior_instructions: str = "",
+    session_context: str = "",
+    known_players: Optional[list[str]] = None,
+    token_tracker=None,
 ) -> str:
     """Invoke the two-layer agent and return its response text."""
-    system_prompt = _build_system_prompt(personality, character, trigger_mode)
+    system_prompt = _build_system_prompt(
+        personality, character, trigger_mode,
+        session_context=session_context,
+        known_players=known_players,
+    )
     if behavior_instructions:
         system_prompt += "\n" + behavior_instructions
 
@@ -169,6 +205,7 @@ def run_agent(
     for _ in range(_MAX_TOOL_ROUNDS):
         response: AIMessage = llm_with_tools.invoke(messages)
         messages.append(response)
+        _track_tokens(response, token_tracker)
 
         if not getattr(response, "tool_calls", None):
             return response.content or ""
@@ -183,7 +220,8 @@ def run_agent(
                 result = f"Błąd narzędzia {name}: {exc}"
             messages.append(ToolMessage(content=str(result), tool_call_id=call["id"]))
 
-    # Fallback if max rounds hit — ask for a plain response
+    # Fallback if max rounds hit
     messages.append(HumanMessage(content="Odpowiedz teraz jako postać, bez użycia narzędzi."))
-    final = llm.invoke(messages)
+    final: AIMessage = llm.invoke(messages)
+    _track_tokens(final, token_tracker)
     return final.content or ""

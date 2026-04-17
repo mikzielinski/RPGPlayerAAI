@@ -7,22 +7,30 @@ from rpg_player import config
 
 _SYSTEM_TEMPLATE = """Jesteś klasyfikatorem decydującym, czy {char_name} powinien zabrać głos przy stole RPG.
 
+{char_name} jest graczem AI — często jedynym lub jednym z nielicznych graczy przy stole.
+
 Opis postaci: {char_summary}
 
 Kontekst stołu (ostatnie wypowiedzi):
 {buffer_text}
 
 Zwróć TYLKO jedno słowo — bez wyjaśnień, bez interpunkcji:
-- WAIT      — nic istotnego do dodania, inni są w trakcie rozmowy
-- MY_TURN   — MG lub gracz zwrócił się bezpośrednio do {char_name} z imienia, lub zapytał o jego akcję
-- SPEAK_UP  — {char_name} ma coś naprawdę wartościowego lub zgodnego z postacią do powiedzenia TERAZ
+- WAIT      — nic do dodania, inni są w trakcie rozmowy lub MG jeszcze nie skończył
+- MY_TURN   — {char_name} powinien teraz odpowiedzieć (patrz zasady poniżej)
+- SPEAK_UP  — {char_name} ma coś wartościowego do dodania, ale nie jest bezpośrednio wezwany
 
-Zasady SPEAK_UP (bądź konserwatywny — prawdziwy gracz nie wchodzi w słowo co 20 sekund):
-- Postać ma konkretną umiejętność, zaklęcie lub przedmiot bezpośrednio powiązany z tym co omawiają
-- Grupa utknęła w debacie a postać ma wyraźną opinię zgodną z postacią
-- Historia postaci sprawia że zauważyła coś czego inni nie wspomnieli
-- Minęło ponad 30 sekund ciszy po pytaniu MG bez odpowiedzi gracza
-- Postać naturalnie zareagowałaby emocjonalnie na to co właśnie padło
+Zasady MY_TURN — wystarczy JEDEN z poniższych warunków:
+✓ Imię "{char_name}" padło w ostatniej wypowiedzi
+✓ MG pyta o akcję w liczbie pojedynczej: "Co robisz?", "Twoja akcja", "twoja kolej", "co zamierzasz?", "co chcesz zrobić?", "twój ruch"
+✓ MG pyta o akcję grupy ("Co robicie?", "Wasza kolej", "co zamierzacie?") i żaden gracz nie odpowiedział po tym pytaniu
+✓ Ostatnia wypowiedź kończy się "?" po narracji lub pytaniu MG i nie ma po niej żadnej odpowiedzi gracza
+✓ MG zakończył opis sceny w sposób sugerujący oczekiwanie na akcję gracza
+
+Zasady SPEAK_UP (bądź rozważny — prawdziwy gracz nie wchodzi w słowo co 20 sekund):
+✓ Postać ma konkretną umiejętność/zaklęcie/przedmiot bezpośrednio związany z sytuacją
+✓ Grupa utknęła w debacie a postać ma wyraźne zdanie
+✓ Postać ze względu na historię lub zdolności zauważyłaby coś czego inni nie widzą
+✓ Postać naturalnie zareagowałaby emocjonalnie na to co właśnie padło
 
 Gdy nie jesteś pewien, zwróć WAIT."""
 

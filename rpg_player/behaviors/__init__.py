@@ -18,6 +18,7 @@ from rpg_player.behaviors.dice_reactions import (
 )
 from rpg_player.behaviors.plot_reactions import PlotTwistBehavior, EmotionalSceneBehavior
 from rpg_player.behaviors.uncertainty import RulesUncertaintyBehavior
+from rpg_player.behaviors.swearing import SwearingBehavior
 from rpg_player.behaviors.group_dynamics import GroupDebateBehavior
 from rpg_player.behaviors.silence_filler import SilenceFillerBehavior
 
@@ -70,6 +71,7 @@ DEFAULT_CHAIN = (
     .register(PlotTwistBehavior())
     .register(EmotionalSceneBehavior())
     .register(RulesUncertaintyBehavior())
+    .register(SwearingBehavior())
     .register(GroupDebateBehavior())
     .register(SilenceFillerBehavior())
 )

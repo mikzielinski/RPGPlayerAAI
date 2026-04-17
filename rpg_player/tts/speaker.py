@@ -1,24 +1,72 @@
-"""TTS abstraction supporting Edge TTS (default) and Kokoro TTS backends."""
+"""TTS abstraction supporting Edge TTS (default) and Kokoro TTS backends.
+
+Edge TTS prosody (rate/pitch) is adjusted automatically based on detected
+emotion keywords in the spoken text.  Call next_voice() to cycle through
+AVAILABLE_VOICES at runtime (bound to 'v' key in main loop).
+"""
 from __future__ import annotations
 
 import asyncio
-import io
-import random
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 from rpg_player import config
+
+# Keyword → emotion mapping for Edge TTS prosody adjustment
+_EMOTION_KEYWORDS: dict[str, list[str]] = {
+    "anger": [
+        "kurwa", "cholera", "do diabła", "wkurwiony", "wkurwiona",
+        "wściekły", "wściekła", "nie do wiary", "przeklinam", "idiot",
+    ],
+    "fear": [
+        "boję się", "strach", "przerażony", "przerażona",
+        "zaraz zginiemy", "uciekaj", "ratunku", "ucieka",
+    ],
+    "joy": [
+        "tak!", "niesamowite", "super", "hura", "cudownie",
+        "brawo", "udało się", "wygraliśmy", "trafienie!", "świetnie",
+    ],
+    "sadness": [
+        "niestety", "smutno", "przykro mi", "straciliśmy",
+        "padł", "umarł", "szkoda", "zginął", "przegraliśmy",
+    ],
+}
+
+
+def _detect_emotion(text: str) -> str:
+    lower = text.lower()
+    for emotion, keywords in _EMOTION_KEYWORDS.items():
+        for kw in keywords:
+            if kw in lower:
+                return emotion
+    return "neutral"
 
 
 class Speaker:
     def __init__(self, backend: str | None = None, voice: str | None = None):
         self._backend = backend or config.TTS_BACKEND
-        self._voice = voice or config.TTS_VOICE
+        available = config.AVAILABLE_VOICES or [config.TTS_VOICE]
+        initial = voice or config.TTS_VOICE
+        self._voice_index = available.index(initial) if initial in available else 0
         self._kokoro_pipeline = None
 
         if self._backend == "kokoro":
             self._init_kokoro()
+
+    # ------------------------------------------------------------------
+    # Voice management
+    # ------------------------------------------------------------------
+
+    @property
+    def current_voice(self) -> str:
+        available = config.AVAILABLE_VOICES or [config.TTS_VOICE]
+        return available[self._voice_index % len(available)]
+
+    def next_voice(self) -> str:
+        """Cycle to the next voice in AVAILABLE_VOICES and return its name."""
+        available = config.AVAILABLE_VOICES or [config.TTS_VOICE]
+        self._voice_index = (self._voice_index + 1) % len(available)
+        return self.current_voice
 
     # ------------------------------------------------------------------
     # Public interface
@@ -36,7 +84,7 @@ class Speaker:
             await self._speak_edge(text)
 
     def set_voice_style(self, style: str) -> None:
-        """Hook for future NPC voice differentiation — updates internal voice hint."""
+        """Hook for NPC voice differentiation — updates internal voice hint."""
         self._voice_style_hint = style
 
     # ------------------------------------------------------------------
@@ -48,7 +96,17 @@ class Speaker:
         import sounddevice as sd
         import soundfile as sf
 
-        communicate = edge_tts.Communicate(text, self._voice)
+        emotion = _detect_emotion(text)
+        params = config.EMOTION_VOICE_PARAMS.get(
+            emotion, config.EMOTION_VOICE_PARAMS.get("neutral", {})
+        )
+
+        communicate = edge_tts.Communicate(
+            text,
+            self.current_voice,
+            rate=params.get("rate", "+0%"),
+            pitch=params.get("pitch", "+0Hz"),
+        )
         audio_bytes = b""
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
@@ -89,8 +147,8 @@ class Speaker:
             )
 
     async def _speak_kokoro(self, text: str) -> None:
+        import asyncio
         import sounddevice as sd
-        import numpy as np
 
         loop = asyncio.get_event_loop()
         samples, sample_rate = await loop.run_in_executor(

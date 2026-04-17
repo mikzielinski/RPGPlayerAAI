@@ -13,16 +13,51 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 # STT
 WHISPER_MODEL = "base"  # or "small" for better accuracy
 SILENCE_THRESHOLD_SEC = 1.5
+WHISPER_LANGUAGE = "pl"
+WHISPER_INITIAL_PROMPT = (
+    "Sesja RPG. Postacie: mag, wojownik, łotrzyk, kleryk. "
+    "Słowa kluczowe: Mistrz Gry, MG, kość, rzut, d20, d6, "
+    "trafienie krytyczne, zaklęcie, mana, dungeons, dragons."
+)
 
 # Session behaviour
 BUFFER_MAX_EXCHANGES = 15
 SPEAK_UP_COOLDOWN_SEC = 45
 RAG_TIMEOUT_SEC = 2.5
 MAX_CREATION_QUESTIONS = 5
+# After N consecutive WAITs on a question → force MY_TURN
+CONSECUTIVE_WAIT_FORCE_THRESHOLD: int = 4
 
 # TTS backend: "edge" or "kokoro"
 TTS_BACKEND = "edge"
-TTS_VOICE = "pl-PL-MarekNeural"  # Polish male; alternative: pl-PL-ZofiaNeural (female)
+TTS_VOICE = "pl-PL-MarekNeural"
+
+# Available voices cycled with 'v' key at runtime
+AVAILABLE_VOICES: list[str] = [
+    "pl-PL-MarekNeural",   # Polish male
+    "pl-PL-ZofiaNeural",   # Polish female
+]
+
+# Emotion → Edge TTS prosody adjustments (rate and pitch)
+EMOTION_VOICE_PARAMS: dict[str, dict[str, str]] = {
+    "anger":   {"rate": "+15%", "pitch": "+5Hz"},
+    "fear":    {"rate": "+20%", "pitch": "+15Hz"},
+    "joy":     {"rate": "+10%", "pitch": "+8Hz"},
+    "sadness": {"rate": "-15%", "pitch": "-5Hz"},
+    "neutral": {"rate": "+0%",  "pitch": "+0Hz"},
+}
+
+# Swearing intensity injected into agent system prompt
+# Values: "off" | "mild" | "moderate" | "heavy"
+SWEARING_INTENSITY: str = os.environ.get("SWEARING_INTENSITY", "off")
+
+# Token warning thresholds (cumulative tokens in current session)
+TOKEN_WARN_AT: int = 60_000
+TOKEN_CRITICAL_AT: int = 90_000
+
+# Session persistence
+SESSIONS_DIR = os.path.join(_DATA_DIR, "sessions")
+SESSION_HISTORY_CONTEXT_EXCHANGES: int = 10
 
 # Paths (absolute, anchored to rpg_player/data/)
 CHARACTER_FILE = os.path.join(_DATA_DIR, "character.json")
@@ -36,3 +71,7 @@ COOLDOWN_BY_FREQUENCY = {
     "umiarkowanie": 45,
     "rzadko ale trafnie": 90,
 }
+
+# Additional AI players. Each entry: {"personality_file": "...", "character_file": "..."}
+# Example: [{"personality_file": "data/player2_personality.json", "character_file": "data/character2.json"}]
+ADDITIONAL_PLAYERS: list[dict] = []

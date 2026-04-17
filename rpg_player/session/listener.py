@@ -1,4 +1,9 @@
-"""Continuous Whisper STT stream with silence detection and rolling buffer."""
+"""Continuous Whisper STT stream with silence detection and rolling buffer.
+
+Integrates SpeakerRegistry so utterances containing self-introductions
+("Jestem Marek", "My name is Kate") are labelled with the detected name
+instead of the generic "gracz" label.
+"""
 from __future__ import annotations
 
 import queue
@@ -12,6 +17,7 @@ import sounddevice as sd
 import whisper
 
 from rpg_player import config
+from rpg_player.session.speaker_registry import SpeakerRegistry
 
 _SAMPLE_RATE = 16000
 _CHANNELS = 1
@@ -25,11 +31,13 @@ class Listener:
         model_name: str = config.WHISPER_MODEL,
         silence_sec: float = config.SILENCE_THRESHOLD_SEC,
         max_exchanges: int = config.BUFFER_MAX_EXCHANGES,
+        registry: Optional[SpeakerRegistry] = None,
     ):
         self._char_name = char_name
         self._silence_sec = silence_sec
         self._max_exchanges = max_exchanges
         self._model = whisper.load_model(model_name)
+        self._registry = registry
         self._buffer: deque[dict] = deque()
         self._audio_q: queue.Queue[np.ndarray] = queue.Queue()
         self._running = False
@@ -69,7 +77,7 @@ class Listener:
         frames: list[np.ndarray] = []
         silent_chunks = 0
         silence_limit = int(self._silence_sec * _SAMPLE_RATE / _CHUNK_FRAMES)
-        energy_threshold = 300  # RMS threshold for silence detection
+        energy_threshold = 300
 
         with sd.InputStream(
             samplerate=_SAMPLE_RATE,
@@ -90,7 +98,12 @@ class Listener:
                     silent_chunks = 0
 
         audio = np.concatenate(frames).astype(np.float32) / 32768.0
-        result = self._model.transcribe(audio, language="pl", fp16=False)
+        result = self._model.transcribe(
+            audio,
+            language=config.WHISPER_LANGUAGE,
+            fp16=False,
+            initial_prompt=config.WHISPER_INITIAL_PROMPT,
+        )
         return result["text"].strip()
 
     # ------------------------------------------------------------------
@@ -130,11 +143,19 @@ class Listener:
                         audio = np.concatenate(frames).astype(np.float32) / 32768.0
                         try:
                             result = self._model.transcribe(
-                                audio, language="pl", fp16=False
+                                audio,
+                                language=config.WHISPER_LANGUAGE,
+                                fp16=False,
+                                initial_prompt=config.WHISPER_INITIAL_PROMPT,
                             )
                             text = result["text"].strip()
                             if text:
-                                self._append_exchange("unknown", text)
+                                speaker = "gracz"
+                                if self._registry:
+                                    detected = self._registry.process(text)
+                                    if detected:
+                                        speaker = detected
+                                self._append_exchange(speaker, text)
                         except Exception as e:
                             print(f"[listener] Błąd transkrypcji: {e}")
                         finally:
