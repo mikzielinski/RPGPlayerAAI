@@ -3,215 +3,308 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>RPG AI Player Bot - Web Panel</title>
+    <title>RPG AI Player Bot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <header class="topbar">
-      <h1>RPG AI Player Bot - Panel WWW</h1>
-      <div class="topbar-actions">
-        <button id="refreshStateBtn" class="btn">Odswiez</button>
+      <div class="brand">
+        <span class="brand-icon">⚔️</span>
+        <span class="brand-name">RPG AI Player Bot</span>
       </div>
+      <nav class="tabs" id="mainTabs">
+        <button class="tab-btn active" data-tab="panel">Panel</button>
+        <button class="tab-btn" data-tab="config">Konfiguracja</button>
+        <button class="tab-btn" data-tab="charakter">Postać</button>
+        <button class="tab-btn" data-tab="zasoby">Zasoby</button>
+        <button class="tab-btn" data-tab="discord">Discord</button>
+      </nav>
+      <button id="refreshStateBtn" class="btn btn-ghost btn-sm">↻ Odśwież</button>
     </header>
 
-    <main class="layout">
-      <section class="card">
-        <h2>Status systemu</h2>
-        <div id="statusGrid" class="status-grid"></div>
-      </section>
+    <!-- TAB: Panel -->
+    <main class="tab-content active" id="tab-panel">
+      <div class="page-grid">
 
-      <section class="card">
-        <h2>Sterowanie botem</h2>
-        <div class="actions">
-          <button id="startBotBtn" class="btn btn-primary">Start bota</button>
-          <button id="stopBotBtn" class="btn btn-danger">Stop bota</button>
-          <button id="validateBtn" class="btn">Waliduj setup</button>
-          <button id="ingestBtn" class="btn">Ingest plikow</button>
-        </div>
-        <pre id="commandOutput" class="console"></pre>
-      </section>
+        <section class="card span-2">
+          <div class="card-header">
+            <h2>Status systemu</h2>
+            <div id="botStatusBadge" class="badge badge-off">Zatrzymany</div>
+          </div>
+          <div id="statusGrid" class="status-grid"></div>
+        </section>
 
-      <section class="card">
-        <h2>Konfiguracja .env</h2>
-        <div class="form-row">
-          <label for="openaiKey">OPENAI_API_KEY</label>
-          <input id="openaiKey" type="password" placeholder="sk-..." />
-        </div>
+        <section class="card">
+          <div class="card-header"><h2>Sterowanie botem</h2></div>
+          <div class="actions">
+            <button id="startBotBtn" class="btn btn-primary">▶ Start bota</button>
+            <button id="stopBotBtn" class="btn btn-danger">■ Stop bota</button>
+            <button id="validateBtn" class="btn">✓ Waliduj setup</button>
+            <button id="ingestBtn" class="btn">⬆ Ingest plików</button>
+          </div>
+          <pre id="commandOutput" class="console mt-2"></pre>
+        </section>
 
-        <div class="form-row">
-          <label for="bufferMaxExchanges">BUFFER_MAX_EXCHANGES</label>
-          <input id="bufferMaxExchanges" type="number" min="5" max="40" step="1" />
-          <p class="help-text">
-            Ile ostatnich wypowiedzi trafia do kontekstu decyzji i odpowiedzi.
-            Mniejszy bufor = szybciej, ale bot latwiej gubi kontekst.
-            Wiekszy bufor = lepsza pamiec rozmowy, ale wolniej i drozej tokenowo.
+        <section class="card">
+          <div class="card-header"><h2>Log procesu bota</h2></div>
+          <pre id="botLogs" class="console console-tall"></pre>
+        </section>
+
+      </div>
+    </main>
+
+    <!-- TAB: Konfiguracja -->
+    <main class="tab-content" id="tab-config">
+      <div class="page-grid">
+
+        <section class="card">
+          <div class="card-header"><h2>API &amp; Klucze</h2></div>
+
+          <div class="form-row">
+            <label for="openaiKey">OPENAI_API_KEY</label>
+            <input id="openaiKey" type="password" placeholder="sk-…" autocomplete="off" />
+            <p class="help-text">Klucz API OpenAI. Zostaw puste jeśli nie chcesz zmieniać.</p>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header"><h2>Zachowanie bota</h2></div>
+
+          <div class="form-row">
+            <label for="responseMode">Tryb odpowiedzi (RESPONSE_MODE)</label>
+            <select id="responseMode">
+              <option value="manual">manual — tylko po klawiszu F</option>
+              <option value="gm">gm — odpowiada gdy bezpośrednio zagadnięty</option>
+              <option value="auto">auto — autonomiczny klasyfikator</option>
+            </select>
+            <p class="help-text">
+              <strong>manual</strong>: bot milczy dopóki nie naciśniesz F. Pełna kontrola.<br/>
+              <strong>gm</strong>: bot odpowiada gdy MG/gracz do niego mówi. Zalecane.<br/>
+              <strong>auto</strong>: bot sam decyduje kiedy wejść na podstawie kontekstu.
+            </p>
+          </div>
+
+          <div class="form-row">
+            <label for="bufferMaxExchanges">Rozmiar bufora kontekstu (BUFFER_MAX_EXCHANGES)</label>
+            <div class="slider-row">
+              <input id="bufferMaxExchanges" type="range" min="5" max="40" step="1" value="15" class="slider" />
+              <span id="bufferMaxExchangesVal" class="slider-val">15</span>
+            </div>
+            <p class="help-text">
+              Ile ostatnich wypowiedzi trafia do kontekstu modelu przy każdej decyzji.
+              <strong>Mniej (5–10)</strong>: szybciej i taniej, bot łatwo gubi wątek.
+              <strong>Więcej (20–40)</strong>: lepsza pamięć rozmowy, wolniej i drożej tokenowo.
+            </p>
+          </div>
+
+          <div class="form-row">
+            <label for="swearingIntensity">Intensywność przekleństw (SWEARING_INTENSITY)</label>
+            <select id="swearingIntensity">
+              <option value="off">off — brak przekleństw</option>
+              <option value="mild">mild — łagodne (np. "cholera")</option>
+              <option value="moderate">moderate — umiarkowane</option>
+              <option value="heavy">heavy — mocne</option>
+            </select>
+          </div>
+
+          <div class="form-row checkbox-row">
+            <label class="toggle-label">
+              <input id="allowSpeakUp" type="checkbox" class="toggle" />
+              <span class="toggle-track"></span>
+              ALLOW_PROACTIVE_SPEAK_UP — bot może wtrącać się samodzielnie
+            </label>
+          </div>
+
+          <div class="form-row checkbox-row">
+            <label class="toggle-label">
+              <input id="enableExtraPlayers" type="checkbox" class="toggle" />
+              <span class="toggle-track"></span>
+              ENABLE_ADDITIONAL_AI_PLAYERS — dodatkowi bot-gracze
+            </label>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header"><h2>Synteza mowy (TTS)</h2></div>
+
+          <div class="form-row">
+            <label for="ttsBackend">Backend TTS (TTS_BACKEND)</label>
+            <select id="ttsBackend">
+              <option value="edge">edge — Microsoft Edge TTS (bezpłatny, polskie głosy)</option>
+              <option value="openai">openai — OpenAI TTS (płatny, lepsza jakość)</option>
+              <option value="kokoro">kokoro — lokalne Kokoro ONNX (offline)</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <label for="ttsVoice">Głos domyślny (TTS_VOICE)</label>
+            <input id="ttsVoice" type="text" placeholder="pl-PL-MarekNeural" />
+            <p class="help-text">
+              Edge: <code>pl-PL-MarekNeural</code>, <code>pl-PL-ZofiaNeural</code><br/>
+              OpenAI: <code>alloy</code>, <code>verse</code>, <code>shimmer</code>, <code>echo</code>, <code>fable</code>, <code>onyx</code>
+            </p>
+          </div>
+
+          <div class="tts-openai-section">
+            <div class="section-divider">Ustawienia OpenAI TTS</div>
+
+            <div class="form-row">
+              <label for="openaiTtsModel">Model (OPENAI_TTS_MODEL)</label>
+              <input id="openaiTtsModel" type="text" placeholder="gpt-4o-mini-tts" />
+            </div>
+
+            <div class="form-row">
+              <label for="openaiTtsVoice">Głos OpenAI (OPENAI_TTS_VOICE)</label>
+              <input id="openaiTtsVoice" type="text" placeholder="alloy" />
+            </div>
+
+            <div class="form-row">
+              <label for="openaiTtsFormat">Format audio (OPENAI_TTS_FORMAT)</label>
+              <select id="openaiTtsFormat">
+                <option value="mp3">mp3 — dobra kompresja, szerokie wsparcie</option>
+                <option value="wav">wav — bez kompresji, najlepsza jakość</option>
+                <option value="opus">opus — mały rozmiar, streaming</option>
+                <option value="flac">flac — bezstratna kompresja</option>
+                <option value="pcm">pcm — surowe próbki (zaawansowane)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="actions mt-2">
+            <button id="saveEnvBtn" class="btn btn-primary">Zapisz konfigurację</button>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <!-- TAB: Postać -->
+    <main class="tab-content" id="tab-charakter">
+      <div class="page-grid">
+
+        <section class="card">
+          <div class="card-header"><h2>Karta postaci (character.json)</h2></div>
+          <textarea id="characterJson" class="json-editor"></textarea>
+          <div class="actions mt-2">
+            <button id="loadCharacterBtn" class="btn">Wczytaj</button>
+            <button id="saveCharacterBtn" class="btn btn-primary">Zapisz</button>
+            <button data-reset="character" class="btn btn-danger resetBtn">Reset domyślny</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header"><h2>Osobowość (player_personality.json)</h2></div>
+          <textarea id="personalityJson" class="json-editor"></textarea>
+          <div class="actions mt-2">
+            <button id="loadPersonalityBtn" class="btn">Wczytaj</button>
+            <button id="savePersonalityBtn" class="btn btn-primary">Zapisz</button>
+            <button data-reset="personality" class="btn btn-danger resetBtn">Reset domyślny</button>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <!-- TAB: Zasoby -->
+    <main class="tab-content" id="tab-zasoby">
+      <div class="page-grid">
+
+        <section class="card">
+          <div class="card-header"><h2>Pliki gry (RAG)</h2></div>
+          <form id="uploadForm" class="upload-form">
+            <div class="file-drop-area">
+              <input id="gameFilesInput" type="file" multiple accept=".pdf,.docx,.xlsx" class="file-input" />
+              <p>Przeciągnij pliki lub <strong>kliknij</strong> by wybrać</p>
+              <p class="help-text">Obsługuje .pdf, .docx, .xlsx</p>
+            </div>
+            <button type="submit" class="btn btn-primary">Wyślij pliki</button>
+          </form>
+          <div class="actions">
+            <button data-reset="chroma" class="btn btn-danger resetBtn">Wyczyść Chroma DB</button>
+          </div>
+          <ul id="gameFilesList" class="file-list mt-2"></ul>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <h2>Historia sesji</h2>
+            <div class="header-actions">
+              <button id="reloadSessionsBtn" class="btn btn-sm">Odśwież</button>
+              <button data-reset="sessions" class="btn btn-danger btn-sm resetBtn">Usuń wszystkie</button>
+            </div>
+          </div>
+          <ul id="sessionsList" class="item-list"></ul>
+          <pre id="sessionDetails" class="console mt-2"></pre>
+        </section>
+
+        <section class="card span-2">
+          <div class="card-header">
+            <h2>Log stanu gry (JSONL)</h2>
+            <button id="reloadGameLogBtn" class="btn btn-sm">Odśwież</button>
+          </div>
+          <pre id="gameLogView" class="console console-tall"></pre>
+        </section>
+
+      </div>
+    </main>
+
+    <!-- TAB: Discord -->
+    <main class="tab-content" id="tab-discord">
+      <div class="page-grid">
+
+        <section class="card">
+          <div class="card-header"><h2>Konfiguracja Discord</h2></div>
+
+          <div class="form-row checkbox-row">
+            <label class="toggle-label">
+              <input id="discordEnabled" type="checkbox" class="toggle" />
+              <span class="toggle-track"></span>
+              DISCORD_ENABLED — włącz integrację
+            </label>
+          </div>
+
+          <div class="form-row">
+            <label for="discordBotToken">Token bota (DISCORD_BOT_TOKEN)</label>
+            <input id="discordBotToken" type="password" placeholder="Bot token z Discord Developer Portal" autocomplete="off" />
+          </div>
+
+          <div class="form-row">
+            <label for="discordGuildId">ID serwera (DISCORD_GUILD_ID)</label>
+            <input id="discordGuildId" type="text" placeholder="np. 1234567890123456789" />
+            <p class="help-text">Prawy klik na nazwę serwera → Kopiuj ID serwera (tryb dewelopera musi być włączony).</p>
+          </div>
+
+          <div class="form-row">
+            <label for="discordTextChannelId">ID kanału tekstowego (DISCORD_TEXT_CHANNEL_ID)</label>
+            <input id="discordTextChannelId" type="text" placeholder="ID kanału #rpg-session" />
+          </div>
+
+          <div class="form-row">
+            <label for="discordVoiceChannelId">ID kanału głosowego (DISCORD_VOICE_CHANNEL_ID)</label>
+            <input id="discordVoiceChannelId" type="text" placeholder="ID kanału głosowego" />
+          </div>
+
+          <div class="actions mt-2">
+            <button id="saveDiscordBtn" class="btn btn-primary">Zapisz konfigurację Discord</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <h2>Status Discord</h2>
+            <button id="reloadDiscordBtn" class="btn btn-sm">Odśwież</button>
+          </div>
+          <p class="help-text mb-2">
+            Po zapisaniu konfiguracji i uruchomieniu bota status powinien przejść na
+            <strong>connected: true</strong>. Bot wejdzie na kanał głosowy i zapyta graczy o prezentację postaci.
           </p>
-        </div>
+          <pre id="discordStatusView" class="console console-tall"></pre>
+        </section>
 
-        <div class="form-row">
-          <label for="swearingIntensity">SWEARING_INTENSITY</label>
-          <select id="swearingIntensity">
-            <option value="off">off</option>
-            <option value="mild">mild</option>
-            <option value="moderate">moderate</option>
-            <option value="heavy">heavy</option>
-          </select>
-        </div>
-
-        <div class="form-row">
-          <label for="responseMode">RESPONSE_MODE</label>
-          <select id="responseMode">
-            <option value="manual">manual (tylko po klawiszu f)</option>
-            <option value="gm">gm (odpowiedzi na bezposrednie pytania)</option>
-            <option value="auto">auto (stary autonomiczny tryb)</option>
-          </select>
-        </div>
-
-        <div class="form-row">
-          <label for="ttsBackend">TTS_BACKEND</label>
-          <select id="ttsBackend">
-            <option value="edge">edge</option>
-            <option value="openai">openai</option>
-            <option value="kokoro">kokoro</option>
-          </select>
-        </div>
-
-        <div class="form-row">
-          <label for="ttsVoice">TTS_VOICE</label>
-          <input id="ttsVoice" type="text" placeholder="np. pl-PL-MarekNeural albo alloy" />
-        </div>
-
-        <div class="form-row">
-          <label for="openaiTtsModel">OPENAI_TTS_MODEL</label>
-          <input id="openaiTtsModel" type="text" placeholder="gpt-4o-mini-tts" />
-        </div>
-
-        <div class="form-row">
-          <label for="openaiTtsVoice">OPENAI_TTS_VOICE</label>
-          <input id="openaiTtsVoice" type="text" placeholder="alloy / verse / ..." />
-        </div>
-
-        <div class="form-row">
-          <label for="openaiTtsFormat">OPENAI_TTS_FORMAT</label>
-          <select id="openaiTtsFormat">
-            <option value="mp3">mp3</option>
-            <option value="wav">wav</option>
-            <option value="opus">opus</option>
-            <option value="flac">flac</option>
-            <option value="pcm">pcm</option>
-          </select>
-        </div>
-
-        <div class="form-row checkbox-row">
-          <label>
-            <input id="allowSpeakUp" type="checkbox" />
-            ALLOW_PROACTIVE_SPEAK_UP (samodzielne wtracanie sie)
-          </label>
-        </div>
-
-        <div class="form-row checkbox-row">
-          <label>
-            <input id="enableExtraPlayers" type="checkbox" />
-            ENABLE_ADDITIONAL_AI_PLAYERS (dodatkowi bot-gracze)
-          </label>
-        </div>
-
-        <h3 class="subheading">Discord (MVP)</h3>
-
-        <div class="form-row checkbox-row">
-          <label>
-            <input id="discordEnabled" type="checkbox" />
-            DISCORD_ENABLED
-          </label>
-        </div>
-
-        <div class="form-row">
-          <label for="discordBotToken">DISCORD_BOT_TOKEN</label>
-          <input id="discordBotToken" type="password" placeholder="Bot token" />
-        </div>
-
-        <div class="form-row">
-          <label for="discordGuildId">DISCORD_GUILD_ID</label>
-          <input id="discordGuildId" type="text" placeholder="ID serwera" />
-        </div>
-
-        <div class="form-row">
-          <label for="discordTextChannelId">DISCORD_TEXT_CHANNEL_ID</label>
-          <input id="discordTextChannelId" type="text" placeholder="ID kanalu tekstowego" />
-        </div>
-
-        <div class="form-row">
-          <label for="discordVoiceChannelId">DISCORD_VOICE_CHANNEL_ID</label>
-          <input id="discordVoiceChannelId" type="text" placeholder="ID kanalu glosowego" />
-        </div>
-
-        <div class="actions">
-          <button id="saveEnvBtn" class="btn">Zapisz .env</button>
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>Postac (character.json)</h2>
-        <textarea id="characterJson" class="json-editor"></textarea>
-        <div class="actions">
-          <button id="loadCharacterBtn" class="btn">Wczytaj</button>
-          <button id="saveCharacterBtn" class="btn btn-primary">Zapisz</button>
-          <button data-reset="character" class="btn btn-danger resetBtn">Reset</button>
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>Osobowosc (player_personality.json)</h2>
-        <textarea id="personalityJson" class="json-editor"></textarea>
-        <div class="actions">
-          <button id="loadPersonalityBtn" class="btn">Wczytaj</button>
-          <button id="savePersonalityBtn" class="btn btn-primary">Zapisz</button>
-          <button data-reset="personality" class="btn btn-danger resetBtn">Reset</button>
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>Pliki gry (RAG)</h2>
-        <form id="uploadForm" class="upload-form">
-          <input id="gameFilesInput" type="file" multiple accept=".pdf,.docx,.xlsx" />
-          <button type="submit" class="btn btn-primary">Wyslij pliki</button>
-        </form>
-        <div class="actions">
-          <button data-reset="chroma" class="btn btn-danger resetBtn">Wyczysc Chroma</button>
-        </div>
-        <ul id="gameFilesList" class="list"></ul>
-      </section>
-
-      <section class="card">
-        <h2>Historia sesji</h2>
-        <div class="actions">
-          <button id="reloadSessionsBtn" class="btn">Odswiez sesje</button>
-          <button data-reset="sessions" class="btn btn-danger resetBtn">Usun wszystkie sesje</button>
-        </div>
-        <ul id="sessionsList" class="list"></ul>
-        <pre id="sessionDetails" class="console"></pre>
-      </section>
-
-      <section class="card">
-        <h2>Log procesu bota</h2>
-        <pre id="botLogs" class="console"></pre>
-      </section>
-
-      <section class="card">
-        <h2>Log stanu gry (JSONL)</h2>
-        <div class="actions">
-          <button id="reloadGameLogBtn" class="btn">Odswiez game log</button>
-        </div>
-        <pre id="gameLogView" class="console"></pre>
-      </section>
-
-      <section class="card">
-        <h2>Discord status (MVP)</h2>
-        <p class="help-text">
-          Po zapisaniu .env i uruchomieniu bota status powinien przejsc na <strong>connected: true</strong>.
-        </p>
-        <pre id="discordStatusView" class="console"></pre>
-      </section>
+      </div>
     </main>
 
     <div id="toast" class="toast hidden"></div>

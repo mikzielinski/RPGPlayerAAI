@@ -3,24 +3,49 @@ const state = {
   envFormDirty: false,
 };
 
+// ── Tabs ────────────────────────────────────────────────────────────
+function initTabs() {
+  const btns = document.querySelectorAll(".tab-btn");
+  btns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      btns.forEach((b) => b.classList.remove("active"));
+      document.querySelectorAll(".tab-content").forEach((t) => t.classList.remove("active"));
+      btn.classList.add("active");
+      const tab = document.getElementById(`tab-${btn.dataset.tab}`);
+      if (tab) tab.classList.add("active");
+    });
+  });
+}
+
+// ── Slider sync ─────────────────────────────────────────────────────
+function initSliders() {
+  const slider = document.getElementById("bufferMaxExchanges");
+  const val = document.getElementById("bufferMaxExchangesVal");
+  if (!slider || !val) return;
+  slider.addEventListener("input", () => {
+    val.textContent = slider.value;
+    state.envFormDirty = true;
+  });
+}
+
+// ── HTTP helpers ─────────────────────────────────────────────────────
 async function requestJson(url, options = {}) {
   const response = await fetch(url, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
   });
   const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json.message || `HTTP ${response.status}`);
-  }
+  if (!response.ok) throw new Error(json.message || `HTTP ${response.status}`);
   return json;
 }
 
 function showToast(message, isError = false) {
   const toast = document.getElementById("toast");
   toast.textContent = message;
-  toast.classList.remove("hidden");
-  toast.classList.toggle("error", isError);
-  setTimeout(() => toast.classList.add("hidden"), 2500);
+  toast.classList.remove("hidden", "error");
+  if (isError) toast.classList.add("error");
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => toast.classList.add("hidden"), 3000);
 }
 
 function sizeHuman(bytes) {
@@ -29,30 +54,44 @@ function sizeHuman(bytes) {
   return `${bytes} B`;
 }
 
+// ── Status rendering ─────────────────────────────────────────────────
 function renderStatusGrid(status) {
   const el = document.getElementById("statusGrid");
+  const badge = document.getElementById("botStatusBadge");
   const flags = status.flags || {};
   const env = status.env || {};
   const bot = status.bot || {};
   const discord = status.discord || {};
+
+  if (badge) {
+    if (bot.running) {
+      badge.textContent = `Działa (PID ${bot.pid || "-"})`;
+      badge.className = "badge badge-on";
+    } else {
+      badge.textContent = "Zatrzymany";
+      badge.className = "badge badge-off";
+    }
+  }
+
   const discordLabel = !env.discord_enabled
-    ? "wylaczony"
+    ? "wyłączony"
     : discord.connected
-      ? "polaczony"
-      : "wlaczony (niepolaczony)";
+      ? "połączony"
+      : "włączony (niepołączony)";
+
   const rows = [
-    ["Bot", bot.running ? `Dziala (PID ${bot.pid || "-"})` : "Zatrzymany"],
     ["Tryb odpowiedzi", env.response_mode || "-"],
-    ["Bufor", String(env.buffer_max_exchanges || "-")],
-    ["TTS", `${env.tts_backend || "-"} / ${env.tts_voice || "-"}`],
-    ["Proaktywne SPEAK_UP", env.allow_proactive_speak_up ? "wlaczone" : "wylaczone"],
-    ["Dodatkowi bot-gracze", env.enable_additional_ai_players ? "wlaczone" : "wylaczone"],
+    ["Bufor kontekstu", `${env.buffer_max_exchanges || "-"} wypowiedzi`],
+    ["TTS backend", env.tts_backend || "-"],
+    ["Głos TTS", env.tts_voice || "-"],
+    ["SPEAK_UP", env.allow_proactive_speak_up ? "włączone" : "wyłączone"],
+    ["Dodatkowi gracze", env.enable_additional_ai_players ? "włączone" : "wyłączone"],
     ["Discord", discordLabel],
-    ["Postac", flags.has_character ? "OK" : "Brak"],
-    ["Osobowosc", flags.has_personality ? "OK" : "Brak"],
-    ["OPENAI_API_KEY", env.openai_api_key_masked || "brak"],
+    ["Postać", flags.has_character ? "OK" : "Brak"],
+    ["Osobowość", flags.has_personality ? "OK" : "Brak"],
+    ["OpenAI API key", env.openai_api_key_masked || "brak"],
     ["Pliki gry", String(flags.game_files_count || 0)],
-    ["Zapisane sesje", String(flags.sessions_count || 0)],
+    ["Sesje", String(flags.sessions_count || 0)],
   ];
 
   el.innerHTML = rows
@@ -66,17 +105,16 @@ function renderStatusGrid(status) {
 function renderGameFiles(files) {
   const list = document.getElementById("gameFilesList");
   if (!files.length) {
-    list.innerHTML = `<li class="list-empty">Brak plikow .pdf/.docx/.xlsx</li>`;
+    list.innerHTML = `<li class="list-empty">Brak plików .pdf/.docx/.xlsx</li>`;
     return;
   }
   list.innerHTML = files
     .map(
       (f) => `
     <li>
-      <span>${f.name} <small>(${sizeHuman(f.size_bytes)})</small></span>
-      <button class="btn btn-danger btn-small" data-delete-file="${f.name}">Usun</button>
-    </li>
-  `,
+      <span>${f.name} <small style="color:var(--text-2)">(${sizeHuman(f.size_bytes)})</small></span>
+      <button class="btn btn-danger btn-sm" data-delete-file="${f.name}">Usuń</button>
+    </li>`,
     )
     .join("");
 }
@@ -91,10 +129,9 @@ function renderSessions(sessions) {
     .map(
       (s) => `
     <li>
-      <span>${s.file} — ${s.character || "?"} — ${s.exchanges_count} wypowiedzi</span>
-      <button class="btn btn-small" data-session-file="${s.file}">Podglad</button>
-    </li>
-  `,
+      <span>${s.file} &mdash; ${s.character || "?"} &mdash; ${s.exchanges_count} wypowiedzi</span>
+      <button class="btn btn-sm" data-session-file="${s.file}">Podgląd</button>
+    </li>`,
     )
     .join("");
 }
@@ -108,17 +145,18 @@ function setBotLogs(lines) {
 }
 
 function setGameLog(entries, latestFile = "") {
-  const pretty = {
-    latest: latestFile,
-    entries,
-  };
-  document.getElementById("gameLogView").textContent = JSON.stringify(pretty, null, 2);
+  document.getElementById("gameLogView").textContent = JSON.stringify(
+    { latest: latestFile, entries },
+    null,
+    2,
+  );
 }
 
 function setDiscordStatus(payload) {
   document.getElementById("discordStatusView").textContent = JSON.stringify(payload || {}, null, 2);
 }
 
+// ── State refresh ────────────────────────────────────────────────────
 async function refreshState() {
   const status = await requestJson("/api/state");
   state.lastStatus = status;
@@ -128,23 +166,35 @@ async function refreshState() {
 
   if (!state.envFormDirty) {
     const env = status.env || {};
-    document.getElementById("swearingIntensity").value = env.swearing_intensity || "off";
-    document.getElementById("responseMode").value = env.response_mode || "gm";
-    document.getElementById("allowSpeakUp").checked = !!env.allow_proactive_speak_up;
-    document.getElementById("enableExtraPlayers").checked = !!env.enable_additional_ai_players;
-    document.getElementById("bufferMaxExchanges").value = String(env.buffer_max_exchanges || 15);
-    document.getElementById("ttsBackend").value = env.tts_backend || "edge";
-    document.getElementById("ttsVoice").value = env.tts_voice || "";
-    document.getElementById("openaiTtsModel").value = env.openai_tts_model || "";
-    document.getElementById("openaiTtsVoice").value = env.openai_tts_voice || "";
-    document.getElementById("openaiTtsFormat").value = env.openai_tts_format || "mp3";
-    document.getElementById("discordEnabled").checked = !!env.discord_enabled;
-    document.getElementById("discordGuildId").value = env.discord_guild_id || "";
-    document.getElementById("discordTextChannelId").value = env.discord_text_channel_id || "";
-    document.getElementById("discordVoiceChannelId").value = env.discord_voice_channel_id || "";
+    _setVal("swearingIntensity", env.swearing_intensity || "off");
+    _setVal("responseMode", env.response_mode || "gm");
+    _setChecked("allowSpeakUp", !!env.allow_proactive_speak_up);
+    _setChecked("enableExtraPlayers", !!env.enable_additional_ai_players);
+    _setVal("bufferMaxExchanges", String(env.buffer_max_exchanges || 15));
+    const valEl = document.getElementById("bufferMaxExchangesVal");
+    if (valEl) valEl.textContent = String(env.buffer_max_exchanges || 15);
+    _setVal("ttsBackend", env.tts_backend || "edge");
+    _setVal("ttsVoice", env.tts_voice || "");
+    _setVal("openaiTtsModel", env.openai_tts_model || "");
+    _setVal("openaiTtsVoice", env.openai_tts_voice || "");
+    _setVal("openaiTtsFormat", env.openai_tts_format || "mp3");
+    _setChecked("discordEnabled", !!env.discord_enabled);
+    _setVal("discordGuildId", env.discord_guild_id || "");
+    _setVal("discordTextChannelId", env.discord_text_channel_id || "");
+    _setVal("discordVoiceChannelId", env.discord_voice_channel_id || "");
   }
 }
 
+function _setVal(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.value = val;
+}
+function _setChecked(id, checked) {
+  const el = document.getElementById(id);
+  if (el) el.checked = checked;
+}
+
+// ── Data loaders ─────────────────────────────────────────────────────
 async function loadCharacter() {
   const res = await requestJson("/api/character");
   document.getElementById("characterJson").value = JSON.stringify(res.data || {}, null, 2);
@@ -175,70 +225,66 @@ async function loadDiscordStatus() {
   setDiscordStatus(res || {});
 }
 
+// ── Save helpers ─────────────────────────────────────────────────────
 async function saveJsonFromEditor(editorId, endpoint) {
   const raw = document.getElementById(editorId).value.trim();
   let data = {};
   if (raw) data = JSON.parse(raw);
-  const res = await requestJson(endpoint, {
-    method: "POST",
-    body: JSON.stringify({ data }),
-  });
+  const res = await requestJson(endpoint, { method: "POST", body: JSON.stringify({ data }) });
   showToast(res.message || "Zapisano");
+}
+
+function _collectEnvPayload() {
+  return {
+    swearing_intensity: document.getElementById("swearingIntensity").value,
+    response_mode: document.getElementById("responseMode").value,
+    allow_proactive_speak_up: document.getElementById("allowSpeakUp").checked,
+    enable_additional_ai_players: document.getElementById("enableExtraPlayers").checked,
+    buffer_max_exchanges: document.getElementById("bufferMaxExchanges").value,
+    tts_backend: document.getElementById("ttsBackend").value,
+    tts_voice: (document.getElementById("ttsVoice").value || "").trim(),
+    openai_tts_model: (document.getElementById("openaiTtsModel").value || "").trim(),
+    openai_tts_voice: (document.getElementById("openaiTtsVoice").value || "").trim(),
+    openai_tts_format: document.getElementById("openaiTtsFormat").value,
+  };
+}
+
+function _collectDiscordPayload() {
+  return {
+    discord_enabled: document.getElementById("discordEnabled").checked,
+    discord_guild_id: (document.getElementById("discordGuildId").value || "").trim(),
+    discord_text_channel_id: (document.getElementById("discordTextChannelId").value || "").trim(),
+    discord_voice_channel_id: (document.getElementById("discordVoiceChannelId").value || "").trim(),
+  };
 }
 
 async function saveEnv() {
-  const key = document.getElementById("openaiKey").value.trim();
-  const swearing = document.getElementById("swearingIntensity").value;
-  const responseMode = document.getElementById("responseMode").value;
-  const allowSpeakUp = document.getElementById("allowSpeakUp").checked;
-  const enableExtraPlayers = document.getElementById("enableExtraPlayers").checked;
-  const bufferMaxExchanges = document.getElementById("bufferMaxExchanges").value;
-  const ttsBackend = document.getElementById("ttsBackend").value;
-  const ttsVoice = document.getElementById("ttsVoice").value.trim();
-  const openaiTtsModel = document.getElementById("openaiTtsModel").value.trim();
-  const openaiTtsVoice = document.getElementById("openaiTtsVoice").value.trim();
-  const openaiTtsFormat = document.getElementById("openaiTtsFormat").value.trim();
-  const discordEnabled = document.getElementById("discordEnabled").checked;
-  const discordBotToken = document.getElementById("discordBotToken").value.trim();
-  const discordGuildId = document.getElementById("discordGuildId").value.trim();
-  const discordTextChannelId = document.getElementById("discordTextChannelId").value.trim();
-  const discordVoiceChannelId = document.getElementById("discordVoiceChannelId").value.trim();
-
-  const payload = {
-    swearing_intensity: swearing,
-    response_mode: responseMode,
-    allow_proactive_speak_up: allowSpeakUp,
-    enable_additional_ai_players: enableExtraPlayers,
-    buffer_max_exchanges: bufferMaxExchanges,
-    tts_backend: ttsBackend,
-    tts_voice: ttsVoice,
-    openai_tts_model: openaiTtsModel,
-    openai_tts_voice: openaiTtsVoice,
-    openai_tts_format: openaiTtsFormat,
-    discord_enabled: discordEnabled,
-    discord_guild_id: discordGuildId,
-    discord_text_channel_id: discordTextChannelId,
-    discord_voice_channel_id: discordVoiceChannelId,
-  };
+  const payload = _collectEnvPayload();
+  const key = (document.getElementById("openaiKey").value || "").trim();
   if (key) payload.openai_api_key = key;
-  if (discordBotToken) payload.discord_bot_token = discordBotToken;
-
-  const res = await requestJson("/api/env", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  const res = await requestJson("/api/env", { method: "POST", body: JSON.stringify(payload) });
   state.envFormDirty = false;
   showToast(res.message || "Zapisano");
   document.getElementById("openaiKey").value = "";
-  document.getElementById("discordBotToken").value = "";
   await refreshState();
 }
 
+async function saveDiscord() {
+  const payload = _collectDiscordPayload();
+  const token = (document.getElementById("discordBotToken").value || "").trim();
+  if (token) payload.discord_bot_token = token;
+  const res = await requestJson("/api/env", { method: "POST", body: JSON.stringify(payload) });
+  showToast(res.message || "Zapisano Discord");
+  document.getElementById("discordBotToken").value = "";
+  await loadDiscordStatus();
+}
+
+// ── Actions ───────────────────────────────────────────────────────────
 async function validateSetup() {
-  setCommandOutput("Uruchamiam walidacje...");
+  setCommandOutput("Uruchamiam walidację...");
   const res = await requestJson("/api/validate", { method: "POST" });
   setCommandOutput(res.output || "(brak outputu)");
-  showToast(res.ok ? "Walidacja OK" : "Walidacja z bledami", !res.ok);
+  showToast(res.ok ? "Walidacja OK" : "Walidacja z błędami", !res.ok);
 }
 
 async function ingestFiles() {
@@ -250,18 +296,17 @@ async function ingestFiles() {
 async function startBot() {
   const res = await requestJson("/api/bot/start", { method: "POST" });
   showToast(res.message || "Bot uruchomiony");
+  await refreshState();
 }
 
 async function stopBot() {
   const res = await requestJson("/api/bot/stop", { method: "POST" });
   showToast(res.message || "Bot zatrzymany");
+  await refreshState();
 }
 
 async function resetTarget(target) {
-  const res = await requestJson("/api/reset", {
-    method: "POST",
-    body: JSON.stringify({ target }),
-  });
+  const res = await requestJson("/api/reset", { method: "POST", body: JSON.stringify({ target }) });
   showToast(res.message || "Reset wykonany");
 }
 
@@ -269,24 +314,13 @@ async function uploadFiles(ev) {
   ev.preventDefault();
   const input = document.getElementById("gameFilesInput");
   const files = input.files;
-  if (!files || files.length === 0) {
-    showToast("Wybierz pliki do wyslania", true);
-    return;
-  }
+  if (!files || files.length === 0) { showToast("Wybierz pliki do wysłania", true); return; }
   const form = new FormData();
   for (const file of files) form.append("files", file);
-
-  const response = await fetch("/api/game-files/upload", {
-    method: "POST",
-    body: form,
-  });
+  const response = await fetch("/api/game-files/upload", { method: "POST", body: form });
   const json = await response.json();
-  if (!response.ok) {
-    showToast(json.message || "Blad uploadu", true);
-    return;
-  }
-  const summary = `Zapisano: ${(json.saved || []).join(", ") || "-"}`;
-  showToast(summary);
+  if (!response.ok) { showToast(json.message || "Błąd uploadu", true); return; }
+  showToast(`Zapisano: ${(json.saved || []).join(", ") || "-"}`);
   input.value = "";
   await loadGameFiles();
   await refreshState();
@@ -297,40 +331,19 @@ async function loadSessionDetails(file) {
   document.getElementById("sessionDetails").textContent = JSON.stringify(res.session || {}, null, 2);
 }
 
+// ── Wire events ───────────────────────────────────────────────────────
 function wireEvents() {
-  const markEnvDirty = () => {
-    state.envFormDirty = true;
-  };
-
+  const markDirty = () => { state.envFormDirty = true; };
   [
-    "swearingIntensity",
-    "responseMode",
-    "allowSpeakUp",
-    "enableExtraPlayers",
-    "bufferMaxExchanges",
-    "ttsBackend",
-    "ttsVoice",
-    "openaiTtsModel",
-    "openaiTtsVoice",
-    "discordEnabled",
-    "discordGuildId",
-    "discordTextChannelId",
-    "discordVoiceChannelId",
-    "discordBotToken",
-    "openaiKey",
+    "swearingIntensity", "responseMode", "allowSpeakUp", "enableExtraPlayers",
+    "ttsBackend", "ttsVoice", "openaiTtsModel", "openaiTtsVoice", "openaiTtsFormat", "openaiKey",
   ].forEach((id) => {
     const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener("change", markEnvDirty);
-    el.addEventListener("input", markEnvDirty);
+    if (el) { el.addEventListener("change", markDirty); el.addEventListener("input", markDirty); }
   });
 
   document.getElementById("refreshStateBtn").addEventListener("click", async () => {
-    await refreshState();
-    await loadGameFiles();
-    await loadSessions();
-    await loadGameLog();
-    await loadDiscordStatus();
+    await Promise.all([refreshState(), loadGameFiles(), loadSessions(), loadGameLog(), loadDiscordStatus()]);
   });
 
   document.getElementById("startBotBtn").addEventListener("click", startBot);
@@ -338,30 +351,23 @@ function wireEvents() {
   document.getElementById("validateBtn").addEventListener("click", validateSetup);
   document.getElementById("ingestBtn").addEventListener("click", ingestFiles);
   document.getElementById("saveEnvBtn").addEventListener("click", saveEnv);
+  document.getElementById("saveDiscordBtn")?.addEventListener("click", saveDiscord);
   document.getElementById("reloadGameLogBtn").addEventListener("click", loadGameLog);
+  document.getElementById("reloadDiscordBtn")?.addEventListener("click", loadDiscordStatus);
+  document.getElementById("reloadSessionsBtn").addEventListener("click", loadSessions);
+  document.getElementById("uploadForm").addEventListener("submit", uploadFiles);
 
   document.getElementById("loadCharacterBtn").addEventListener("click", loadCharacter);
   document.getElementById("saveCharacterBtn").addEventListener("click", async () => {
-    try {
-      await saveJsonFromEditor("characterJson", "/api/character");
-      await refreshState();
-    } catch (err) {
-      showToast(`Blad JSON: ${err.message}`, true);
-    }
+    try { await saveJsonFromEditor("characterJson", "/api/character"); await refreshState(); }
+    catch (err) { showToast(`Błąd JSON: ${err.message}`, true); }
   });
 
   document.getElementById("loadPersonalityBtn").addEventListener("click", loadPersonality);
   document.getElementById("savePersonalityBtn").addEventListener("click", async () => {
-    try {
-      await saveJsonFromEditor("personalityJson", "/api/personality");
-      await refreshState();
-    } catch (err) {
-      showToast(`Blad JSON: ${err.message}`, true);
-    }
+    try { await saveJsonFromEditor("personalityJson", "/api/personality"); await refreshState(); }
+    catch (err) { showToast(`Błąd JSON: ${err.message}`, true); }
   });
-
-  document.getElementById("reloadSessionsBtn").addEventListener("click", loadSessions);
-  document.getElementById("uploadForm").addEventListener("submit", uploadFiles);
 
   document.body.addEventListener("click", async (ev) => {
     const target = ev.target;
@@ -382,29 +388,25 @@ function wireEvents() {
     const deleteFile = target.getAttribute("data-delete-file");
     if (deleteFile) {
       await requestJson(`/api/game-files/${encodeURIComponent(deleteFile)}`, { method: "DELETE" });
-      showToast(`Usunieto ${deleteFile}`);
+      showToast(`Usunięto ${deleteFile}`);
       await loadGameFiles();
       await refreshState();
       return;
     }
 
     const sessionFile = target.getAttribute("data-session-file");
-    if (sessionFile) {
-      await loadSessionDetails(sessionFile);
-    }
+    if (sessionFile) await loadSessionDetails(sessionFile);
   });
 }
 
+// ── Bootstrap ────────────────────────────────────────────────────────
 async function bootstrap() {
+  initTabs();
+  initSliders();
   wireEvents();
   await Promise.all([
-    refreshState(),
-    loadCharacter(),
-    loadPersonality(),
-    loadGameFiles(),
-    loadSessions(),
-    loadGameLog(),
-    loadDiscordStatus(),
+    refreshState(), loadCharacter(), loadPersonality(),
+    loadGameFiles(), loadSessions(), loadGameLog(), loadDiscordStatus(),
   ]);
   setInterval(async () => {
     await refreshState();
@@ -413,6 +415,4 @@ async function bootstrap() {
   }, 4000);
 }
 
-bootstrap().catch((err) => {
-  showToast(`Blad inicjalizacji: ${err.message}`, true);
-});
+bootstrap().catch((err) => showToast(`Błąd inicjalizacji: ${err.message}`, true));

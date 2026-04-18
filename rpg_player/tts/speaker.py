@@ -187,10 +187,15 @@ class Speaker:
         if audio_format not in config.OPENAI_TTS_ALLOWED_FORMATS:
             audio_format = "mp3"
 
+        # Resolve effective OpenAI voice — Edge voices (e.g. "pl-PL-MarekNeural") contain
+        # hyphens and are invalid for OpenAI; fall back to the configured OpenAI default.
+        cv = self.current_voice
+        openai_voice = cv if (cv and "-" not in cv) else config.OPENAI_TTS_VOICE
+
         # audio.speech.create is sync; run in executor to keep async flow.
         base_kwargs = {
             "model": config.OPENAI_TTS_MODEL,
-            "voice": self.current_voice or config.OPENAI_TTS_VOICE,
+            "voice": openai_voice,
             "input": text,
             "speed": float(speed),
         }
