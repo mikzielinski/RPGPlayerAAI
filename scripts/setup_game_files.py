@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Interactive game file setup — describe formats, scan folder, confirm, save to .env."""
+"""Interactive game file setup - describe formats, scan folder, confirm, save to .env."""
 import os
 import sys
 import platform
@@ -26,7 +26,7 @@ _GAME_DIR  = _REPO_ROOT / "rpg_player" / "data" / "game_files"
 _ENV_PATH  = _REPO_ROOT / ".env"
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+# Helpers
 
 def scan() -> list[Path]:
     _GAME_DIR.mkdir(parents=True, exist_ok=True)
@@ -71,19 +71,19 @@ def print_files(files: list[Path]) -> None:
     for f in files:
         print(f"  {G}+{RST}  {B}{f.name}{RST}  {D}({_size_str(f)}){RST}")
     total_str = f"{total / 1_048_576:.1f} MB" if total >= 1_000_000 else f"{total / 1024:.0f} KB"
-    print(f"\n  {len(files)} file(s)  ·  {total_str} total")
+    print(f"\n  {len(files)} file(s)  -  {total_str} total")
 
 
-# ── Main ───────────────────────────────────────────────────────────────────────
+# Main
 
 def main() -> int:
     already_confirmed = os.environ.get("GAME_FILES_CONFIRMED") == "1"
 
     print(f"\n{B}{C}  Game Document Setup{RST}")
-    print(f"  {D}{'─' * 42}{RST}")
+    print(f"  {D}{'-' * 42}{RST}")
     print(f"""
   The bot indexes your RPG files into a local vector database and uses
-  them to look up rules, lore, and spells during the session — just like
+  them to look up rules, lore, and spells during the session - just like
   a player who actually read the manual.
 
   {B}Supported formats:{RST}""")
@@ -104,11 +104,11 @@ def main() -> int:
             choice = input(f"  Keep these files and continue? [{B}Y{RST}/n/o(pen)]: ").strip().lower()
             if choice in ("", "y"):
                 save_env(True)
-                print(f"\n  {G}✓{RST}  Confirmed — files will be indexed on startup")
+                print(f"\n  {G}[OK]{RST}  Confirmed - files will be indexed on startup")
                 return 0
             elif choice == "n":
                 save_env(False)
-                print(f"\n  {Y}⚠{RST}  Skipping — RAG will be disabled this session")
+                print(f"\n  {Y}[WARN]{RST}  Skipping - RAG will be disabled this session")
                 return 0
             elif choice == "o":
                 open_folder()
@@ -130,21 +130,21 @@ def main() -> int:
 
             if choice in ("", "y"):
                 save_env(True)
-                print(f"\n  {G}✓{RST}  Confirmed — {len(files)} file(s) will be indexed on startup")
-                print(f"  {G}✓{RST}  Saved GAME_FILES_CONFIRMED=1 to .env")
+                print(f"\n  {G}[OK]{RST}  Confirmed - {len(files)} file(s) will be indexed on startup")
+                print(f"  {G}[OK]{RST}  Saved GAME_FILES_CONFIRMED=1 to .env")
                 return 0
             elif choice == "o":
                 open_folder()
                 input("  Folder opened. Add your files then press Enter to re-scan... ")
             elif choice == "s":
                 save_env(False)
-                print(f"\n  {Y}⚠{RST}  Skipping — RAG lookup will be disabled this session")
+                print(f"\n  {Y}[WARN]{RST}  Skipping - RAG lookup will be disabled this session")
                 return 0
 
         else:
             print(f"  {B}[O]{RST}  Open the folder in your file browser")
             print(f"  {B}[R]{RST}  Re-scan (if you added files in another window)")
-            print(f"  {B}[S]{RST}  Skip — continue without game files")
+            print(f"  {B}[S]{RST}  Skip - continue without game files")
             choice = input(f"\n  Your choice [O/r/s]: ").strip().lower()
 
             if choice in ("", "o"):
@@ -154,7 +154,7 @@ def main() -> int:
                 pass  # loop again
             elif choice == "s":
                 save_env(False)
-                print(f"\n  {Y}⚠{RST}  Skipping — RAG will be disabled this session")
+                print(f"\n  {Y}[WARN]{RST}  Skipping - RAG will be disabled this session")
                 return 0
 
 

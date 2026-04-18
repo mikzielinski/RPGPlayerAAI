@@ -194,6 +194,8 @@ def run_agent(
         model=config.AGENT_MODEL,
         openai_api_key=config.OPENAI_API_KEY,
         temperature=0.85,
+        timeout=config.OPENAI_TIMEOUT_SEC,
+        max_retries=config.OPENAI_MAX_RETRIES,
     )
     llm_with_tools = llm.bind_tools(tools)
 
@@ -203,7 +205,11 @@ def run_agent(
     ]
 
     for _ in range(_MAX_TOOL_ROUNDS):
-        response: AIMessage = llm_with_tools.invoke(messages)
+        try:
+            response: AIMessage = llm_with_tools.invoke(messages)
+        except Exception:
+            # Return a short fallback instead of hanging the whole turn.
+            return "Chwileczke, chyba mam opoznienie polaczenia. Jedziemy dalej."
         messages.append(response)
         _track_tokens(response, token_tracker)
 
@@ -222,6 +228,9 @@ def run_agent(
 
     # Fallback if max rounds hit
     messages.append(HumanMessage(content="Odpowiedz teraz jako postać, bez użycia narzędzi."))
-    final: AIMessage = llm.invoke(messages)
+    try:
+        final: AIMessage = llm.invoke(messages)
+    except Exception:
+        return "Nie zdazylem tego dopracowac, ale jestem dalej z wami."
     _track_tokens(final, token_tracker)
     return final.content or ""
