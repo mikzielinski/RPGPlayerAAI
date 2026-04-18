@@ -40,10 +40,6 @@ class Listener:
         self._model = None
         self._model_error = ""
         try:
-            if config.WHISPER_INSECURE_SSL:
-                # Optional escape hatch for corporate/self-signed MITM environments.
-                ssl._create_default_https_context = ssl._create_unverified_context
-                print("[listener] WHISPER_INSECURE_SSL=1 -> pomijam weryfikacje certyfikatow SSL dla pobierania modelu.")
             self._model = whisper.load_model(model_name)
         except Exception as exc:
             self._model_error = str(exc)

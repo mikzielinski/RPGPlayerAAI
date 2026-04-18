@@ -198,7 +198,13 @@ class Speaker:
         loop = asyncio.get_running_loop()
         audio_bytes = await loop.run_in_executor(
             None,
-            partial(self._create_openai_tts_audio_bytes, client, base_kwargs, audio_format),
+            lambda: client.audio.speech.create(
+                model=config.OPENAI_TTS_MODEL,
+                voice=self.current_voice or config.OPENAI_TTS_VOICE,
+                input=text,
+                format=audio_format,
+                speed=float(speed),
+            ).read(),
         )
         if not audio_bytes:
             return
