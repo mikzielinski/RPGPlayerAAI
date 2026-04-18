@@ -38,6 +38,15 @@
           <input id="openaiKey" type="password" placeholder="sk-..." />
         </div>
         <div class="form-row">
+          <label for="bufferMaxExchanges">BUFFER_MAX_EXCHANGES</label>
+          <input id="bufferMaxExchanges" type="number" min="5" max="40" step="1" />
+          <p class="help-text">
+            Ile ostatnich wypowiedzi trafia do kontekstu decyzji i odpowiedzi.
+            Mniejszy bufor = szybciej, ale bot latwiej gubi kontekst.
+            Wiekszy bufor = lepsza pamiec rozmowy, ale wolniej i drozej tokenowo.
+          </p>
+        </div>
+        <div class="form-row">
           <label for="swearingIntensity">SWEARING_INTENSITY</label>
           <select id="swearingIntensity">
             <option value="off">off</option>
@@ -66,13 +75,78 @@
             ENABLE_ADDITIONAL_AI_PLAYERS (dodatkowi bot-gracze)
           </label>
         </div>
+        <div class="form-row">
+          <label for="ttsBackend">TTS_BACKEND</label>
+          <select id="ttsBackend">
+            <option value="edge">edge</option>
+            <option value="openai">openai</option>
+            <option value="kokoro">kokoro</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="ttsVoice">TTS_VOICE</label>
+          <input id="ttsVoice" type="text" placeholder="np. pl-PL-MarekNeural albo alloy" />
+        </div>
+        <div class="form-row">
+          <label for="openaiTtsModel">OPENAI_TTS_MODEL</label>
+          <input id="openaiTtsModel" type="text" placeholder="gpt-4o-mini-tts" />
+        </div>
+        <div class="form-row">
+          <label for="openaiTtsVoice">OPENAI_TTS_VOICE</label>
+          <input id="openaiTtsVoice" type="text" placeholder="alloy / verse / ..." />
+        </div>
+
+        <h3 class="section-title">Discord konfiguracja</h3>
+        <div class="form-row checkbox-row">
+          <label>
+            <input id="discordEnabled" type="checkbox" />
+            DISCORD_ENABLED
+          </label>
+        </div>
+        <div class="form-row">
+          <label for="discordBotToken">DISCORD_BOT_TOKEN</label>
+          <input id="discordBotToken" type="password" placeholder="Bot token" />
+        </div>
+        <div class="form-row">
+          <label for="discordGuildId">DISCORD_GUILD_ID</label>
+          <input id="discordGuildId" type="text" placeholder="ID serwera" />
+        </div>
+        <div class="form-row">
+          <label for="discordTextChannelId">DISCORD_TEXT_CHANNEL_ID</label>
+          <input id="discordTextChannelId" type="text" placeholder="ID kanalu tekstowego" />
+        </div>
+        <div class="form-row">
+          <label for="discordVoiceChannelId">DISCORD_VOICE_CHANNEL_ID</label>
+          <input id="discordVoiceChannelId" type="text" placeholder="ID kanalu glosowego" />
+        </div>
         <div class="actions">
           <button id="saveEnvBtn" class="btn">Zapisz .env</button>
         </div>
       </section>
 
       <section class="card">
-        <h2>Postac (character.json)</h2>
+        <h2>Kreator postaci AI (na podstawie podrecznika)</h2>
+        <div class="form-row">
+          <label for="wizardSystem">System gry</label>
+          <select id="wizardSystem"></select>
+        </div>
+        <div class="form-row">
+          <label for="wizardConcept">Koncepcja postaci od MG/gracza</label>
+          <textarea id="wizardConcept" class="json-editor compact-editor" placeholder="Np. Potrzebuje tieflinga warlocka pod mroczna kampanie miejską."></textarea>
+        </div>
+        <div class="form-row">
+          <label for="wizardRulebooks">Podreczniki do użycia (Ctrl/Cmd + klik = multiselect)</label>
+          <select id="wizardRulebooks" multiple class="multi-select"></select>
+        </div>
+        <div class="actions">
+          <button id="generateCharacterBtn" class="btn btn-primary">Generuj karte AI</button>
+        </div>
+        <pre id="wizardMeta" class="console compact-console"></pre>
+      </section>
+
+      <section class="card">
+        <h2>Karta postaci (edytowalna w trakcie gry)</h2>
+        <div id="characterCardView" class="character-card"></div>
         <textarea id="characterJson" class="json-editor"></textarea>
         <div class="actions">
           <button id="loadCharacterBtn" class="btn">Wczytaj</button>
@@ -116,6 +190,32 @@
       <section class="card">
         <h2>Log procesu bota</h2>
         <pre id="botLogs" class="console"></pre>
+      </section>
+
+      <section class="card">
+        <h2>Discord - panel zarzadzania botem</h2>
+        <div class="actions">
+          <button id="discordStartBtn" class="btn btn-primary">Start Discord bota</button>
+          <button id="discordStopBtn" class="btn btn-danger">Stop Discord bota</button>
+          <button id="discordIntroBtn" class="btn">Prosba o przedstawienie</button>
+        </div>
+        <div class="form-row">
+          <label for="discordManualMessage">Wiadomosc testowa / narracyjna do wyslania na kanal tekstowy</label>
+          <textarea id="discordManualMessage" class="json-editor compact-editor" placeholder="MG: Wszyscy opiszcie swoja postac w 1 zdaniu."></textarea>
+        </div>
+        <div class="actions">
+          <button id="discordSendBtn" class="btn">Wyslij na Discord</button>
+          <button id="discordRefreshBtn" class="btn">Odswiez status Discord</button>
+        </div>
+        <pre id="discordStatus" class="console"></pre>
+      </section>
+
+      <section class="card">
+        <h2>Log stanu gry (JSONL)</h2>
+        <div class="actions">
+          <button id="reloadGameLogBtn" class="btn">Odswiez game log</button>
+        </div>
+        <pre id="gameLogView" class="console"></pre>
       </section>
     </main>
 

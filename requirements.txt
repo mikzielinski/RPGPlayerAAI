@@ -1,5 +1,6 @@
 openai
 flask
+discord.py
 langchain
 langchain-openai
 langchain-community

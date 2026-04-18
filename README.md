@@ -110,10 +110,65 @@ The panel lets you:
 - start/stop the bot process,
 - edit `character.json` and `player_personality.json`,
 - upload/delete RAG game files and trigger ingest,
+- generate system-specific character sheets from rulebooks with AI,
+- edit the character card live during session (JSON + visual card view),
+- control Discord bot from web panel (start/stop/send status messages),
 - change runtime behavior mode:
   - `manual` — bot speaks only after `f`,
   - `gm` — bot responds only when directly addressed,
   - `auto` — legacy autonomous behavior.
+
+### 5 — Character wizard by game system (rulebook-driven)
+
+In web panel:
+
+1. Upload one or more rulebooks in **Pliki gry (RAG)** (`.pdf`, `.docx`, `.xlsx`).
+2. Open **Kreator postaci AI (na podstawie podrecznika)**.
+3. Select:
+   - **System gry** (`auto` or explicit, e.g. DnD5e),
+   - **Koncepcja postaci** (brief GM prompt),
+   - **Podreczniki** to use as source context.
+4. Click **Generuj karte AI**.
+
+The app will:
+- detect or use selected game system,
+- extract snippets from selected rulebooks,
+- generate a complete JSON character sheet,
+- save it to `rpg_player/data/character.json`,
+- render a readable character card preview in UI.
+
+You can edit this card any time during session and click **Zapisz**.
+
+### 6 — Discord integration (web-managed)
+
+#### Step A: Configure `.env` in panel
+
+In **Konfiguracja .env** set:
+
+```env
+DISCORD_ENABLED=1
+DISCORD_BOT_TOKEN=your_token
+DISCORD_GUILD_ID=your_server_id
+DISCORD_TEXT_CHANNEL_ID=your_text_channel_id
+DISCORD_VOICE_CHANNEL_ID=your_voice_channel_id
+```
+
+Save `.env` in panel.
+
+#### Step B: Start Discord bot from web
+
+Use **Discord - panel zarzadzania botem**:
+- **Start Discord bota**
+- **Prosba o przedstawienie** (asks users to map player -> character)
+- **Wyslij na Discord** (manual GM control message)
+- **Odswiez status Discord**
+
+The status panel shows:
+- running/connected state,
+- active guild/channel names,
+- known users,
+- recent incoming/outgoing messages,
+- last connection error.
 
 ---
 

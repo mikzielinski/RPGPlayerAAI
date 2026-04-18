@@ -1,4 +1,4 @@
-"""TTS abstraction supporting Edge TTS (default) and Kokoro TTS backends.
+"""TTS abstraction supporting Edge TTS, OpenAI TTS and Kokoro backends.
 
 Edge TTS prosody (rate/pitch) is adjusted automatically based on detected
 emotion keywords in the spoken text.  Call next_voice() to cycle through
@@ -68,6 +68,27 @@ class Speaker:
         self._voice_index = (self._voice_index + 1) % len(available)
         return self.current_voice
 
+    def set_voice(self, voice: str) -> str:
+        """Set a specific voice directly and return active voice."""
+        voice = (voice or "").strip()
+        if not voice:
+            return self.current_voice
+
+        available = config.AVAILABLE_VOICES or [config.TTS_VOICE]
+        if voice in available:
+            self._voice_index = available.index(voice)
+            return self.current_voice
+
+        # For backends with open voice catalogs (edge/openai), allow custom ids.
+        if self._backend in {"edge", "openai"}:
+            updated = list(available)
+            updated.append(voice)
+            config.AVAILABLE_VOICES = updated
+            self._voice_index = len(updated) - 1
+            return self.current_voice
+
+        return self.current_voice
+
     # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
@@ -80,6 +101,8 @@ class Speaker:
         """Non-blocking TTS playback (awaitable)."""
         if self._backend == "kokoro":
             await self._speak_kokoro(text)
+        elif self._backend == "openai":
+            await self._speak_openai(text)
         else:
             await self._speak_edge(text)
 
@@ -119,6 +142,46 @@ class Speaker:
             f.write(audio_bytes)
             tmp_path = f.name
 
+        try:
+            data, samplerate = sf.read(tmp_path, dtype="float32")
+            sd.play(data, samplerate)
+            sd.wait()
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    # ------------------------------------------------------------------
+    # OpenAI TTS backend
+    # ------------------------------------------------------------------
+
+    async def _speak_openai(self, text: str) -> None:
+        import sounddevice as sd
+        import soundfile as sf
+        from openai import OpenAI
+
+        emotion = _detect_emotion(text)
+        speed = float(config.OPENAI_TTS_EMOTION_SPEED.get(emotion, 1.0))
+        voice = self.current_voice or config.OPENAI_TTS_VOICE
+
+        client = OpenAI(
+            api_key=config.OPENAI_API_KEY,
+            timeout=config.OPENAI_TIMEOUT_SEC,
+            max_retries=config.OPENAI_MAX_RETRIES,
+        )
+        response = client.audio.speech.create(
+            model=config.OPENAI_TTS_MODEL,
+            voice=voice,
+            input=text,
+            format=config.OPENAI_TTS_FORMAT,
+            speed=speed,
+        )
+        audio_bytes = response.content
+        if not audio_bytes:
+            return
+
+        suffix = ".mp3" if config.OPENAI_TTS_FORMAT.lower() == "mp3" else ".wav"
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(audio_bytes)
+            tmp_path = tmp.name
         try:
             data, samplerate = sf.read(tmp_path, dtype="float32")
             sd.play(data, samplerate)
