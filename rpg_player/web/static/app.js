@@ -34,6 +34,12 @@ function renderStatusGrid(status) {
   const flags = status.flags || {};
   const env = status.env || {};
   const bot = status.bot || {};
+  const discord = status.discord || {};
+  const discordLabel = !env.discord_enabled
+    ? "wylaczony"
+    : discord.connected
+      ? "polaczony"
+      : "wlaczony (niepolaczony)";
   const rows = [
     ["Bot", bot.running ? `Dziala (PID ${bot.pid || "-"})` : "Zatrzymany"],
     ["Tryb odpowiedzi", env.response_mode || "-"],
@@ -41,7 +47,7 @@ function renderStatusGrid(status) {
     ["TTS", `${env.tts_backend || "-"} / ${env.tts_voice || "-"}`],
     ["Proaktywne SPEAK_UP", env.allow_proactive_speak_up ? "wlaczone" : "wylaczone"],
     ["Dodatkowi bot-gracze", env.enable_additional_ai_players ? "wlaczone" : "wylaczone"],
-    ["Discord", env.discord_enabled ? "wlaczony" : "wylaczony"],
+    ["Discord", discordLabel],
     ["Postac", flags.has_character ? "OK" : "Brak"],
     ["Osobowosc", flags.has_personality ? "OK" : "Brak"],
     ["OPENAI_API_KEY", env.openai_api_key_masked || "brak"],
@@ -131,6 +137,7 @@ async function refreshState() {
     document.getElementById("ttsVoice").value = env.tts_voice || "";
     document.getElementById("openaiTtsModel").value = env.openai_tts_model || "";
     document.getElementById("openaiTtsVoice").value = env.openai_tts_voice || "";
+    document.getElementById("openaiTtsFormat").value = env.openai_tts_format || "mp3";
     document.getElementById("discordEnabled").checked = !!env.discord_enabled;
     document.getElementById("discordGuildId").value = env.discord_guild_id || "";
     document.getElementById("discordTextChannelId").value = env.discord_text_channel_id || "";
@@ -190,6 +197,7 @@ async function saveEnv() {
   const ttsVoice = document.getElementById("ttsVoice").value.trim();
   const openaiTtsModel = document.getElementById("openaiTtsModel").value.trim();
   const openaiTtsVoice = document.getElementById("openaiTtsVoice").value.trim();
+  const openaiTtsFormat = document.getElementById("openaiTtsFormat").value.trim();
   const discordEnabled = document.getElementById("discordEnabled").checked;
   const discordBotToken = document.getElementById("discordBotToken").value.trim();
   const discordGuildId = document.getElementById("discordGuildId").value.trim();
@@ -206,6 +214,7 @@ async function saveEnv() {
     tts_voice: ttsVoice,
     openai_tts_model: openaiTtsModel,
     openai_tts_voice: openaiTtsVoice,
+    openai_tts_format: openaiTtsFormat,
     discord_enabled: discordEnabled,
     discord_guild_id: discordGuildId,
     discord_text_channel_id: discordTextChannelId,
