@@ -267,6 +267,7 @@ def _system_status(process_manager: BotProcessManager) -> dict[str, Any]:
             "swearing_intensity": env_file.get("SWEARING_INTENSITY", config.SWEARING_INTENSITY),
             "game_files_confirmed": env_file.get("GAME_FILES_CONFIRMED", "0"),
             "response_mode": response_mode,
+            "whisper_insecure_ssl": _env_bool(env_file.get("WHISPER_INSECURE_SSL"), config.WHISPER_INSECURE_SSL),
             "allow_proactive_speak_up": allow_speak_up,
             "enable_additional_ai_players": additional_players_enabled,
             "buffer_max_exchanges": buffer_size,
@@ -407,6 +408,7 @@ def create_app() -> Flask:
     def api_save_env():
         payload = request.get_json(silent=True) or {}
         key = payload.get("openai_api_key")
+        whisper_ssl = payload.get("whisper_insecure_ssl")
         swearing = payload.get("swearing_intensity")
         response_mode = payload.get("response_mode")
         allow_speak_up = payload.get("allow_proactive_speak_up")
@@ -440,6 +442,9 @@ def create_app() -> Flask:
             if response_mode not in {"manual", "gm", "auto"}:
                 return jsonify({"ok": False, "message": "Nieprawidlowa wartosc RESPONSE_MODE."}), 400
             updates["RESPONSE_MODE"] = response_mode
+
+        if whisper_ssl is not None:
+            updates["WHISPER_INSECURE_SSL"] = "1" if _coerce_bool(whisper_ssl) else "0"
 
         if allow_speak_up is not None:
             updates["ALLOW_PROACTIVE_SPEAK_UP"] = "1" if _coerce_bool(allow_speak_up) else "0"

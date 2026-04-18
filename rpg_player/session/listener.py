@@ -39,6 +39,9 @@ class Listener:
         self._max_exchanges = max_exchanges
         self._model = None
         self._model_error = ""
+        if config.WHISPER_INSECURE_SSL:
+            # Bypass SSL verification — useful on corporate VPNs with self-signed certs.
+            ssl._create_default_https_context = ssl._create_unverified_context
         try:
             self._model = whisper.load_model(model_name)
         except Exception as exc:
@@ -46,7 +49,9 @@ class Listener:
             print(
                 "[listener] Nie udalo sie zaladowac modelu Whisper. "
                 "Przechodze na awaryjny tryb wpisywania tekstu podczas onboardingu. "
-                f"Szczegoly: {exc}"
+                f"Szczegoly: {exc}\n"
+                "[listener] Wskazowka: ustaw WHISPER_INSECURE_SSL=1 w .env jesli masz VPN z "
+                "samopodpisanym certyfikatem, lub pobierz model recznie do ~/.cache/whisper/."
             )
         self._registry = registry
         self._buffer: deque[dict] = deque()

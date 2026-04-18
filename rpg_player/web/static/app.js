@@ -168,6 +168,7 @@ async function refreshState() {
     const env = status.env || {};
     _setVal("swearingIntensity", env.swearing_intensity || "off");
     _setVal("responseMode", env.response_mode || "gm");
+    _setChecked("whisperInsecureSsl", !!env.whisper_insecure_ssl);
     _setChecked("allowSpeakUp", !!env.allow_proactive_speak_up);
     _setChecked("enableExtraPlayers", !!env.enable_additional_ai_players);
     _setVal("bufferMaxExchanges", String(env.buffer_max_exchanges || 15));
@@ -236,6 +237,7 @@ async function saveJsonFromEditor(editorId, endpoint) {
 
 function _collectEnvPayload() {
   return {
+    whisper_insecure_ssl: document.getElementById("whisperInsecureSsl").checked,
     swearing_intensity: document.getElementById("swearingIntensity").value,
     response_mode: document.getElementById("responseMode").value,
     allow_proactive_speak_up: document.getElementById("allowSpeakUp").checked,
@@ -335,7 +337,7 @@ async function loadSessionDetails(file) {
 function wireEvents() {
   const markDirty = () => { state.envFormDirty = true; };
   [
-    "swearingIntensity", "responseMode", "allowSpeakUp", "enableExtraPlayers",
+    "whisperInsecureSsl", "swearingIntensity", "responseMode", "allowSpeakUp", "enableExtraPlayers",
     "ttsBackend", "ttsVoice", "openaiTtsModel", "openaiTtsVoice", "openaiTtsFormat", "openaiKey",
   ].forEach((id) => {
     const el = document.getElementById(id);

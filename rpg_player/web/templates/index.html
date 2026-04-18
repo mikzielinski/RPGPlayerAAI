@@ -112,6 +112,15 @@
 
           <div class="form-row checkbox-row">
             <label class="toggle-label">
+              <input id="whisperInsecureSsl" type="checkbox" class="toggle" />
+              <span class="toggle-track"></span>
+              WHISPER_INSECURE_SSL — pomiń weryfikację SSL przy pobieraniu modelu
+            </label>
+            <p class="help-text">Włącz jeśli Whisper nie może pobrać modelu przez VPN firmowy (błąd CERTIFICATE_VERIFY_FAILED).</p>
+          </div>
+
+          <div class="form-row checkbox-row">
+            <label class="toggle-label">
               <input id="allowSpeakUp" type="checkbox" class="toggle" />
               <span class="toggle-track"></span>
               ALLOW_PROACTIVE_SPEAK_UP — bot może wtrącać się samodzielnie
