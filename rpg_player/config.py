@@ -35,6 +35,12 @@ OPENAI_TTS_EMOTION_SPEED = {
 WHISPER_MODEL = "base"  # or "small" for better accuracy
 SILENCE_THRESHOLD_SEC = 1.5
 WHISPER_LANGUAGE = "pl"
+WHISPER_INSECURE_SSL = os.environ.get("WHISPER_INSECURE_SSL", "0").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 WHISPER_INITIAL_PROMPT = (
     "Sesja RPG. Postacie: mag, wojownik, łotrzyk, kleryk. "
     "Słowa kluczowe: Mistrz Gry, MG, kość, rzut, d20, d6, "

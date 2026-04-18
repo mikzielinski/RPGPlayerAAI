@@ -26,6 +26,22 @@ REQUIRED_PACKAGES = [
     ("pydantic",      "pydantic"),
 ]
 
+
+def check_audio_input() -> bool:
+    print(f"\n{B}[4/4] Checking audio input device...{RST}")
+    try:
+        import sounddevice as sd
+        devices = sd.query_devices()
+        input_devices = [d for d in devices if int(d.get("max_input_channels", 0)) > 0]
+        if not input_devices:
+            _warn("No input audio device detected - listener may not capture microphone audio.")
+            return False
+        _ok(f"Input devices detected: {len(input_devices)}")
+        return True
+    except Exception as e:
+        _warn(f"Could not verify audio input devices: {e}")
+        return False
+
 def check_packages() -> bool:
     print(f"\n{B}[1/3] Checking installed packages...{RST}")
     all_ok = True
@@ -102,16 +118,17 @@ def main() -> int:
     print(f"{B}{C}  Setup Validation - RPG AI Player Bot{RST}")
     print(f"{B}{C}{'-'*44}{RST}")
 
-    pkg_ok  = check_packages()
-    key_ok  = check_api_key()
-    conn_ok = check_connection() if key_ok else False
+    pkg_ok   = check_packages()
+    key_ok   = check_api_key()
+    conn_ok  = check_connection() if key_ok else False
+    audio_ok = check_audio_input()
 
     print()
-    if pkg_ok and key_ok and conn_ok:
+    if pkg_ok and key_ok and conn_ok and audio_ok:
         print(f"  {G}{B}All checks passed. Ready to play!{RST}")
         return 0
     elif key_ok and conn_ok:
-        print(f"  {Y}{B}Setup complete with warnings - some packages may be missing.{RST}")
+        print(f"  {Y}{B}Setup complete with warnings - check package/audio warnings above.{RST}")
         return 0
     else:
         print(f"  {R}{B}Setup incomplete - fix the errors above and run again.{RST}")
