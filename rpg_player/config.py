@@ -18,6 +18,18 @@ CLASSIFIER_TIMEOUT_SEC = float(os.environ.get("CLASSIFIER_TIMEOUT_SEC", "12"))
 AGENT_TIMEOUT_SEC = float(os.environ.get("AGENT_TIMEOUT_SEC", str(OPENAI_TIMEOUT_SEC)))
 AGENT_MAX_RETRIES = int(os.environ.get("AGENT_MAX_RETRIES", str(OPENAI_MAX_RETRIES)))
 
+# OpenAI TTS support (optional, used when TTS_BACKEND == "openai")
+OPENAI_TTS_MODEL = os.environ.get("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
+OPENAI_TTS_VOICE = os.environ.get("OPENAI_TTS_VOICE", "alloy")
+OPENAI_TTS_FORMAT = os.environ.get("OPENAI_TTS_FORMAT", "mp3")
+OPENAI_TTS_EMOTION_SPEED = {
+    "anger": float(os.environ.get("OPENAI_TTS_SPEED_ANGER", "1.1")),
+    "fear": float(os.environ.get("OPENAI_TTS_SPEED_FEAR", "1.12")),
+    "joy": float(os.environ.get("OPENAI_TTS_SPEED_JOY", "1.08")),
+    "sadness": float(os.environ.get("OPENAI_TTS_SPEED_SADNESS", "0.9")),
+    "neutral": float(os.environ.get("OPENAI_TTS_SPEED_NEUTRAL", "1.0")),
+}
+
 # STT
 WHISPER_MODEL = "base"  # or "small" for better accuracy
 SILENCE_THRESHOLD_SEC = 1.5
@@ -29,12 +41,15 @@ WHISPER_INITIAL_PROMPT = (
 )
 
 # Session behaviour
-BUFFER_MAX_EXCHANGES = 15
+BUFFER_MAX_EXCHANGES = int(os.environ.get("BUFFER_MAX_EXCHANGES", "15"))
 SPEAK_UP_COOLDOWN_SEC = 45
 RAG_TIMEOUT_SEC = 2.5
 MAX_CREATION_QUESTIONS = 5
 # After N consecutive WAITs on a question → force MY_TURN
 CONSECUTIVE_WAIT_FORCE_THRESHOLD: int = 4
+# Exposed in web panel for easier tuning.
+BUFFER_MIN_EXCHANGES = 5
+BUFFER_MAX_EXCHANGES_LIMIT = 40
 
 # Reply control:
 # - "manual": bot speaks only after explicit force command ("f")
@@ -60,14 +75,20 @@ ENABLE_ADDITIONAL_AI_PLAYERS = os.environ.get("ENABLE_ADDITIONAL_AI_PLAYERS", "0
     "on",
 }
 
-# TTS backend: "edge" or "kokoro"
-TTS_BACKEND = "edge"
-TTS_VOICE = "pl-PL-MarekNeural"
+# TTS backend: "edge" or "kokoro" or "openai"
+TTS_BACKEND = os.environ.get("TTS_BACKEND", "edge").strip().lower()
+if TTS_BACKEND not in {"edge", "kokoro", "openai"}:
+    TTS_BACKEND = "edge"
+
+# Default voice for selected backend
+TTS_VOICE = os.environ.get("TTS_VOICE", "pl-PL-MarekNeural")
 
 # Available voices cycled with 'v' key at runtime
 AVAILABLE_VOICES: list[str] = [
-    "pl-PL-MarekNeural",   # Polish male
-    "pl-PL-ZofiaNeural",   # Polish female
+    "pl-PL-MarekNeural",   # Polish male (Edge)
+    "pl-PL-ZofiaNeural",   # Polish female (Edge)
+    "alloy",               # OpenAI TTS
+    "verse",               # OpenAI TTS
 ]
 
 # Emotion → Edge TTS prosody adjustments (rate and pitch)
@@ -91,6 +112,16 @@ TOKEN_CRITICAL_AT: int = 90_000
 SESSIONS_DIR = os.path.join(_DATA_DIR, "sessions")
 SESSION_HISTORY_CONTEXT_EXCHANGES: int = 10
 
+# Structured game-state log (JSONL)
+GAME_LOG_ENABLED = os.environ.get("GAME_LOG_ENABLED", "1").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+GAME_LOGS_DIR = os.path.join(_DATA_DIR, "game_logs")
+GAME_LOG_TAIL_DEFAULT = 80
+
 # Paths (absolute, anchored to rpg_player/data/)
 CHARACTER_FILE = os.path.join(_DATA_DIR, "character.json")
 PERSONALITY_FILE = os.path.join(_DATA_DIR, "player_personality.json")
@@ -107,3 +138,15 @@ COOLDOWN_BY_FREQUENCY = {
 # Additional AI players. Each entry: {"personality_file": "...", "character_file": "..."}
 # Example: [{"personality_file": "data/player2_personality.json", "character_file": "data/character2.json"}]
 ADDITIONAL_PLAYERS: list[dict] = []
+
+# Discord integration (MVP)
+DISCORD_ENABLED = os.environ.get("DISCORD_ENABLED", "0").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+DISCORD_BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
+DISCORD_GUILD_ID = os.environ.get("DISCORD_GUILD_ID", "").strip()
+DISCORD_TEXT_CHANNEL_ID = os.environ.get("DISCORD_TEXT_CHANNEL_ID", "").strip()
+DISCORD_VOICE_CHANNEL_ID = os.environ.get("DISCORD_VOICE_CHANNEL_ID", "").strip()

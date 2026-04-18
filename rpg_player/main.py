@@ -18,10 +18,12 @@ from rpg_player.onboarding.character_creator import create_character
 from rpg_player.session.session_memory import SessionMemory
 from rpg_player.session.speaker_registry import SpeakerRegistry
 from rpg_player.session.token_tracker import TokenTracker
+from rpg_player.session.game_log import GameLog
 from rpg_player.tts.speaker import Speaker
 from rpg_player.session.listener import Listener
 from rpg_player.session.classifier import Classifier
 from rpg_player.session import agent as agent_module
+from rpg_player.integrations.discord_connector import DiscordConnector
 from rpg_player.ui.dashboard import Dashboard
 
 
@@ -199,6 +201,8 @@ def _process_bot_turn(
     vectorstore,
     dash: Dashboard,
     registry: SpeakerRegistry,
+    game_log: GameLog | None = None,
+    discord_connector: DiscordConnector | None = None,
     session_context: str = "",
     force_turn: bool = False,
 ) -> None:
@@ -229,13 +233,43 @@ def _process_bot_turn(
         )
 
     if decision == "WAIT":
+        if game_log:
+            game_log.log_event(
+                event="wait",
+                status="LISTENING",
+                decision=decision,
+                actor=char_name,
+                detail="Bot czeka na dalszy kontekst.",
+                buffer=buf,
+                known_players=registry.known_players,
+            )
         return
 
     if decision == "SPEAK_UP" and not config.ALLOW_PROACTIVE_SPEAK_UP:
         dash.log(f"[dim]{char_name}: SPEAK_UP zablokowany (tryb kontrolowany)[/dim]")
+        if game_log:
+            game_log.log_event(
+                event="blocked_speak_up",
+                status="LISTENING",
+                decision=decision,
+                actor=char_name,
+                detail="SPEAK_UP zablokowany przez ustawienia.",
+                buffer=buf,
+                known_players=registry.known_players,
+            )
         return
 
     if decision == "SPEAK_UP" and speak_up_blocked:
+        if game_log:
+            game_log.log_event(
+                event="cooldown_block",
+                status="COOLDOWN",
+                decision=decision,
+                actor=char_name,
+                detail="Cooldown blokuje SPEAK_UP.",
+                buffer=buf,
+                known_players=registry.known_players,
+            )
         return
 
     # Behavior chain
@@ -272,6 +306,16 @@ def _process_bot_turn(
     except Exception as e:
         dash.update(status="ERROR", error=str(e))
         dash.log(f"[red]Blad agenta ({char_name}): {e}[/red]")
+        if game_log:
+            game_log.log_event(
+                event="agent_error",
+                status="ERROR",
+                decision=decision,
+                actor=char_name,
+                detail=str(e),
+                buffer=buf,
+                known_players=registry.known_players,
+            )
         tts.speak("Dobra, tym razem poczekam.")
         dash.update(status="LISTENING", error="")
         return
@@ -281,6 +325,18 @@ def _process_bot_turn(
         dash.log(f"{char_name}: {response[:80]}{'...' if len(response) > 80 else ''}")
         tts.speak(response)
         listener.add_bot_turn(response)
+        if game_log:
+            game_log.log_event(
+                event="bot_response",
+                status="SPEAKING",
+                decision=decision,
+                actor=char_name,
+                detail=response,
+                buffer=listener.get_buffer(),
+                known_players=registry.known_players,
+            )
+        if discord_connector:
+            discord_connector.relay_bot_message(response)
 
         if decision == "SPEAK_UP":
             player.last_speak_up_time = time.time()
@@ -313,10 +369,13 @@ def main() -> None:
 
     dash = Dashboard()
     tts = Speaker()
+    game_log = GameLog(enabled=config.GAME_LOG_ENABLED)
+    discord_connector = DiscordConnector(enabled=config.DISCORD_ENABLED)
     input_handler = InputHandler()
     registry = SpeakerRegistry()
     if known_players_prev:
         registry.from_dict({"names": known_players_prev, "log": []})
+    discord_connector.attach_registry(registry)
 
     # 1. Ingest game files
     dash.update(status="INGESTING")
@@ -324,6 +383,12 @@ def main() -> None:
     dash.log("Skanowanie plikow gry...")
     vectorstore = ingest_game_files()
     dash.log("Baza wektorowa zaladowana." if vectorstore else "Brak plikow gry — RAG wylaczony.")
+    game_log.log_event(
+        event="startup_ingest",
+        status="INGESTING",
+        detail="Ingest plikow gry zakonczony.",
+        known_players=registry.known_players,
+    )
 
     # 2. Load or create personality
     dash.update(status="ONBOARDING")
@@ -392,6 +457,18 @@ def main() -> None:
         voice_name=tts.current_voice,
         known_players=registry.known_players,
     )
+    game_log.log_event(
+        event="session_ready",
+        status="LISTENING",
+        actor=char_name,
+        detail=(
+            f"Tryb={config.RESPONSE_MODE}, buffer={config.BUFFER_MAX_EXCHANGES}, "
+            f"discord={'on' if config.DISCORD_ENABLED else 'off'}"
+        ),
+        known_players=registry.known_players,
+    )
+    if config.DISCORD_ENABLED:
+        discord_connector.ask_for_introductions()
 
     # 6. Start listener and session
     listener = Listener(char_name=char_name, registry=registry)
@@ -409,6 +486,13 @@ def main() -> None:
         while True:
             if input_handler.quit_requested:
                 dash.log("Konczenie sesji...")
+                game_log.log_event(
+                    event="shutdown_requested",
+                    status="STOPPED",
+                    actor=char_name,
+                    detail="Zakonczenie przez uzytkownika.",
+                    known_players=registry.known_players,
+                )
                 break
 
             time.sleep(0.5)
@@ -430,6 +514,8 @@ def main() -> None:
                 known_players=registry.known_players,
                 token_summary=primary_player.token_tracker.summary(),
             )
+            if config.DISCORD_ENABLED:
+                discord_connector.update_presence(registry.known_players)
 
             buf = listener.get_buffer()
             if not buf:
@@ -446,6 +532,8 @@ def main() -> None:
                     vectorstore=vectorstore,
                     dash=dash,
                     registry=registry,
+                    game_log=game_log,
+                    discord_connector=discord_connector,
                     session_context=session_context,
                     force_turn=(force and i == 0),
                 )
@@ -458,6 +546,8 @@ def main() -> None:
     finally:
         dash.update(status="STOPPED")
         listener.stop()
+        if config.DISCORD_ENABLED:
+            discord_connector.stop()
 
         # Persist session to disk
         try:

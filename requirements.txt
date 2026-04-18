@@ -17,3 +17,4 @@ pypdf
 unstructured[xlsx]
 pydantic
 rich
+discord.py

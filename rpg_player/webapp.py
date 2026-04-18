@@ -15,6 +15,8 @@ from typing import Any
 from flask import Flask, jsonify, render_template, request
 
 from rpg_player import config
+from rpg_player.integrations.discord_connector import DiscordConnector
+from rpg_player.session.game_log import GameLog
 from rpg_player.session.session_memory import SessionMemory
 
 
@@ -133,7 +135,7 @@ class BotProcessManager:
     def __init__(self) -> None:
         self._proc: subprocess.Popen[str] | None = None
         self._lock = threading.Lock()
-        self._logs: deque[str] = deque(maxlen=800)
+        self._logs: deque[str] = deque(maxlen=1200)
         self._reader_thread: threading.Thread | None = None
 
     def _append_log(self, line: str) -> None:
@@ -197,7 +199,7 @@ class BotProcessManager:
         with self._lock:
             running = bool(self._proc and self._proc.poll() is None)
             pid = self._proc.pid if running and self._proc else None
-        return {"running": running, "pid": pid, "logs": list(self._logs)[-300:]}
+        return {"running": running, "pid": pid, "logs": list(self._logs)[-500:]}
 
 
 def _list_game_files() -> list[dict[str, Any]]:
@@ -217,6 +219,17 @@ def _list_game_files() -> list[dict[str, Any]]:
     return files
 
 
+def _discord_status() -> dict[str, Any]:
+    connector = DiscordConnector(
+        enabled=config.DISCORD_ENABLED,
+        token=config.DISCORD_BOT_TOKEN,
+        guild_id=config.DISCORD_GUILD_ID,
+        text_channel_id=config.DISCORD_TEXT_CHANNEL_ID,
+        voice_channel_id=config.DISCORD_VOICE_CHANNEL_ID,
+    )
+    return connector.get_state_snapshot()
+
+
 def _system_status(process_manager: BotProcessManager) -> dict[str, Any]:
     env_file = _load_env_file()
     effective_env = _effective_env()
@@ -227,6 +240,11 @@ def _system_status(process_manager: BotProcessManager) -> dict[str, Any]:
         env_file.get("ENABLE_ADDITIONAL_AI_PLAYERS"),
         config.ENABLE_ADDITIONAL_AI_PLAYERS,
     )
+    buffer_size = int(env_file.get("BUFFER_MAX_EXCHANGES", str(config.BUFFER_MAX_EXCHANGES)))
+    tts_backend = (env_file.get("TTS_BACKEND") or config.TTS_BACKEND).strip().lower()
+    game_logs = GameLog.list_logs()
+    latest_game_log = str(game_logs[0]) if game_logs else ""
+
     return {
         "bot": process_manager.snapshot(),
         "paths": {
@@ -235,6 +253,7 @@ def _system_status(process_manager: BotProcessManager) -> dict[str, Any]:
             "game_files": str(GAME_FILES_PATH),
             "chroma": str(CHROMA_PATH),
             "sessions": str(SESSIONS_PATH),
+            "game_log_latest": latest_game_log,
         },
         "flags": {
             "has_character": CHARACTER_PATH.exists(),
@@ -250,7 +269,19 @@ def _system_status(process_manager: BotProcessManager) -> dict[str, Any]:
             "response_mode": response_mode,
             "allow_proactive_speak_up": allow_speak_up,
             "enable_additional_ai_players": additional_players_enabled,
+            "buffer_max_exchanges": buffer_size,
+            "buffer_min_exchanges": config.BUFFER_MIN_EXCHANGES,
+            "buffer_max_exchanges_limit": config.BUFFER_MAX_EXCHANGES_LIMIT,
+            "tts_backend": tts_backend,
+            "tts_voice": env_file.get("TTS_VOICE", config.TTS_VOICE),
+            "openai_tts_model": env_file.get("OPENAI_TTS_MODEL", config.OPENAI_TTS_MODEL),
+            "openai_tts_voice": env_file.get("OPENAI_TTS_VOICE", config.OPENAI_TTS_VOICE),
+            "discord_enabled": _env_bool(env_file.get("DISCORD_ENABLED"), config.DISCORD_ENABLED),
+            "discord_guild_id": env_file.get("DISCORD_GUILD_ID", config.DISCORD_GUILD_ID),
+            "discord_text_channel_id": env_file.get("DISCORD_TEXT_CHANNEL_ID", config.DISCORD_TEXT_CHANNEL_ID),
+            "discord_voice_channel_id": env_file.get("DISCORD_VOICE_CHANNEL_ID", config.DISCORD_VOICE_CHANNEL_ID),
         },
+        "discord": _discord_status(),
     }
 
 
@@ -379,6 +410,17 @@ def create_app() -> Flask:
         response_mode = payload.get("response_mode")
         allow_speak_up = payload.get("allow_proactive_speak_up")
         enable_extra_players = payload.get("enable_additional_ai_players")
+        buffer_size = payload.get("buffer_max_exchanges")
+        tts_backend = payload.get("tts_backend")
+        tts_voice = payload.get("tts_voice")
+        openai_tts_model = payload.get("openai_tts_model")
+        openai_tts_voice = payload.get("openai_tts_voice")
+        discord_enabled = payload.get("discord_enabled")
+        discord_token = payload.get("discord_bot_token")
+        discord_guild = payload.get("discord_guild_id")
+        discord_text = payload.get("discord_text_channel_id")
+        discord_voice = payload.get("discord_voice_channel_id")
+
         updates: dict[str, str | None] = {}
 
         if key is not None:
@@ -402,6 +444,54 @@ def create_app() -> Flask:
 
         if enable_extra_players is not None:
             updates["ENABLE_ADDITIONAL_AI_PLAYERS"] = "1" if _coerce_bool(enable_extra_players) else "0"
+
+        if buffer_size is not None:
+            try:
+                parsed = int(buffer_size)
+            except Exception:
+                return jsonify({"ok": False, "message": "BUFFER_MAX_EXCHANGES musi byc liczba."}), 400
+            if parsed < config.BUFFER_MIN_EXCHANGES or parsed > config.BUFFER_MAX_EXCHANGES_LIMIT:
+                return jsonify(
+                    {
+                        "ok": False,
+                        "message": (
+                            f"BUFFER_MAX_EXCHANGES musi byc w zakresie "
+                            f"{config.BUFFER_MIN_EXCHANGES}-{config.BUFFER_MAX_EXCHANGES_LIMIT}."
+                        ),
+                    }
+                ), 400
+            updates["BUFFER_MAX_EXCHANGES"] = str(parsed)
+
+        if tts_backend is not None:
+            tts_backend = str(tts_backend).strip().lower()
+            if tts_backend not in {"edge", "kokoro", "openai"}:
+                return jsonify({"ok": False, "message": "Nieprawidlowy TTS_BACKEND."}), 400
+            updates["TTS_BACKEND"] = tts_backend
+
+        if tts_voice is not None:
+            updates["TTS_VOICE"] = str(tts_voice).strip() or None
+
+        if openai_tts_model is not None:
+            updates["OPENAI_TTS_MODEL"] = str(openai_tts_model).strip() or None
+
+        if openai_tts_voice is not None:
+            updates["OPENAI_TTS_VOICE"] = str(openai_tts_voice).strip() or None
+
+        if discord_enabled is not None:
+            updates["DISCORD_ENABLED"] = "1" if _coerce_bool(discord_enabled) else "0"
+
+        if discord_token is not None:
+            token = str(discord_token).strip()
+            updates["DISCORD_BOT_TOKEN"] = token if token else None
+
+        if discord_guild is not None:
+            updates["DISCORD_GUILD_ID"] = str(discord_guild).strip() or None
+
+        if discord_text is not None:
+            updates["DISCORD_TEXT_CHANNEL_ID"] = str(discord_text).strip() or None
+
+        if discord_voice is not None:
+            updates["DISCORD_VOICE_CHANNEL_ID"] = str(discord_voice).strip() or None
 
         if updates:
             _save_env_values(updates)
@@ -462,6 +552,19 @@ def create_app() -> Flask:
             return jsonify({"ok": False, "message": "Sesja nie istnieje."}), 404
         data = json.loads(target.read_text(encoding="utf-8"))
         return jsonify({"ok": True, "session": data, "file": safe_name})
+
+    @app.get("/api/game-log")
+    def api_game_log():
+        logs = GameLog.list_logs()
+        latest = logs[0] if logs else None
+        if not latest:
+            return jsonify({"logs": [], "latest": ""})
+        tail = GameLog.tail(latest, limit=config.GAME_LOG_TAIL_DEFAULT)
+        return jsonify({"latest": latest.name, "logs": tail})
+
+    @app.get("/api/discord")
+    def api_discord_status():
+        return jsonify(_discord_status())
 
     @app.post("/api/bot/start")
     def api_bot_start():

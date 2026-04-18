@@ -44,7 +44,7 @@ def _detect_emotion(text: str) -> str:
 
 class Speaker:
     def __init__(self, backend: str | None = None, voice: str | None = None):
-        self._backend = backend or config.TTS_BACKEND
+        self._backend = (backend or config.TTS_BACKEND).strip().lower()
         available = config.AVAILABLE_VOICES or [config.TTS_VOICE]
         initial = voice or config.TTS_VOICE
         self._voice_index = available.index(initial) if initial in available else 0
@@ -61,6 +61,31 @@ class Speaker:
     def current_voice(self) -> str:
         available = config.AVAILABLE_VOICES or [config.TTS_VOICE]
         return available[self._voice_index % len(available)]
+
+    @property
+    def backend(self) -> str:
+        return self._backend
+
+    def set_voice(self, voice: str) -> str:
+        """Set a specific voice directly and return active voice."""
+        voice = (voice or "").strip()
+        if not voice:
+            return self.current_voice
+
+        available = config.AVAILABLE_VOICES or [config.TTS_VOICE]
+        if voice in available:
+            self._voice_index = available.index(voice)
+            return self.current_voice
+
+        # For backends with open voice catalogs (e.g. edge/openai), allow direct custom id.
+        if self._backend in {"edge", "openai"}:
+            updated = list(available)
+            updated.append(voice)
+            config.AVAILABLE_VOICES = updated
+            self._voice_index = len(updated) - 1
+            return self.current_voice
+
+        return self.current_voice
 
     def next_voice(self) -> str:
         """Cycle to the next voice in AVAILABLE_VOICES and return its name."""
@@ -80,6 +105,8 @@ class Speaker:
         """Non-blocking TTS playback (awaitable)."""
         if self._backend == "kokoro":
             await self._speak_kokoro(text)
+        elif self._backend == "openai":
+            await self._speak_openai(text)
         else:
             await self._speak_edge(text)
 
@@ -112,6 +139,50 @@ class Speaker:
             if chunk["type"] == "audio":
                 audio_bytes += chunk["data"]
 
+        if not audio_bytes:
+            return
+
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+            f.write(audio_bytes)
+            tmp_path = f.name
+
+        try:
+            data, samplerate = sf.read(tmp_path, dtype="float32")
+            sd.play(data, samplerate)
+            sd.wait()
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    # ------------------------------------------------------------------
+    # OpenAI TTS backend
+    # ------------------------------------------------------------------
+
+    async def _speak_openai(self, text: str) -> None:
+        import sounddevice as sd
+        import soundfile as sf
+        from openai import OpenAI
+
+        emotion = _detect_emotion(text)
+        speed = config.OPENAI_TTS_EMOTION_SPEED.get(
+            emotion, config.OPENAI_TTS_EMOTION_SPEED.get("neutral", 1.0)
+        )
+        client = OpenAI(
+            api_key=config.OPENAI_API_KEY,
+            timeout=config.OPENAI_TIMEOUT_SEC,
+            max_retries=config.OPENAI_MAX_RETRIES,
+        )
+        # audio.speech.create is sync; run in executor to keep async flow.
+        loop = asyncio.get_running_loop()
+        audio_bytes = await loop.run_in_executor(
+            None,
+            lambda: client.audio.speech.create(
+                model=config.OPENAI_TTS_MODEL,
+                voice=self.current_voice or config.OPENAI_TTS_VOICE,
+                input=text,
+                format="mp3",
+                speed=float(speed),
+            ).read(),
+        )
         if not audio_bytes:
             return
 
