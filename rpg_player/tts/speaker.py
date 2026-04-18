@@ -52,7 +52,14 @@ class Speaker:
         self._kokoro_pipeline = None
 
         if self._backend == "kokoro":
-            self._init_kokoro()
+            try:
+                self._init_kokoro()
+            except Exception as exc:
+                print(
+                    "[tts] Backend 'kokoro' niedostepny, przelaczam na 'edge'. "
+                    f"Szczegoly: {exc}"
+                )
+                self._backend = "edge"
 
     # ------------------------------------------------------------------
     # Voice management
