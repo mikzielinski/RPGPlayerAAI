@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +11,7 @@ from rpg_player import config
 
 
 def _now_iso() -> str:
-    return datetime.utcnow().isoformat() + "Z"
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 @dataclass
@@ -41,7 +41,7 @@ class GameLog:
         self._enabled = enabled
         self._dir = Path(base_dir)
         self._dir.mkdir(parents=True, exist_ok=True)
-        ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         self._path = self._dir / f"game_log_{ts}.jsonl"
         self._state = GameState()
         self._append(
@@ -66,12 +66,53 @@ class GameLog:
         with self._path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
-    def log_event(self, event_type: str, payload: dict[str, Any]) -> None:
+    def log_event(
+        self,
+        event_type: str | None = None,
+        payload: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """Log either raw events or state-trace events (backward-compatible).
+
+        Supported forms:
+        - log_event("some_type", {"k": "v"})
+        - log_event(event="wait", status="LISTENING", ...)
+        """
+        if kwargs:
+            event_name = str(kwargs.pop("event", event_type or ""))
+            buffer = kwargs.pop("buffer", None)
+            known_players = kwargs.pop("known_players", None)
+
+            trace_payload: dict[str, Any] = {
+                "event": event_name,
+                "status": str(kwargs.pop("status", "")),
+                "decision": str(kwargs.pop("decision", "")),
+                "actor": str(kwargs.pop("actor", "")),
+                "detail": str(kwargs.pop("detail", "")),
+                "known_players": list(known_players or []),
+            }
+            if buffer is not None:
+                trace_payload["buffer_tail"] = list(buffer[-config.BUFFER_MAX_EXCHANGES :])
+            if payload:
+                trace_payload.update(payload)
+            if kwargs:
+                trace_payload.update(kwargs)
+
+            self._append(
+                {
+                    "type": "state_trace",
+                    "timestamp": _now_iso(),
+                    "payload": trace_payload,
+                    "state": self._state.as_dict(),
+                }
+            )
+            return
+
         self._append(
             {
-                "type": event_type,
+                "type": event_type or "event",
                 "timestamp": _now_iso(),
-                "payload": payload,
+                "payload": payload or {},
                 "state": self._state.as_dict(),
             }
         )

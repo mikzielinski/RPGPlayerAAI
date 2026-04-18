@@ -12,6 +12,7 @@ soundfile
 numpy
 scipy
 edge-tts
+kokoro-onnx
 python-docx
 pypdf
 unstructured[xlsx]
