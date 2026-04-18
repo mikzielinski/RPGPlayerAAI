@@ -191,6 +191,9 @@ body {
 .btn-danger { background: var(--danger); border-color: var(--danger-hi); }
 .btn-danger:hover { background: var(--danger-hi); }
 
+.btn-warning { background: #9a6800; border-color: #c9941a; }
+.btn-warning:hover { background: #c9941a; }
+
 .btn-ghost { background: transparent; border-color: transparent; color: var(--text-2); }
 .btn-ghost:hover { background: var(--surface-2); color: var(--text); border-color: var(--border); }
 

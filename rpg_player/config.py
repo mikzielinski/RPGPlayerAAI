@@ -35,6 +35,7 @@ OPENAI_TTS_EMOTION_SPEED = {
 WHISPER_MODEL = "base"  # or "small" for better accuracy
 SILENCE_THRESHOLD_SEC = 1.5
 WHISPER_LANGUAGE = "pl"
+WHISPER_ENERGY_THRESHOLD = int(os.environ.get("WHISPER_ENERGY_THRESHOLD", "800"))
 WHISPER_INSECURE_SSL = os.environ.get("WHISPER_INSECURE_SSL", "0").strip().lower() in {
     "1",
     "true",
@@ -57,6 +58,9 @@ CONSECUTIVE_WAIT_FORCE_THRESHOLD: int = 4
 # Exposed in web panel for easier tuning.
 BUFFER_MIN_EXCHANGES = 5
 BUFFER_MAX_EXCHANGES_LIMIT = 40
+
+# Flag file written by the web panel to request a buffer flush from the running bot.
+BUFFER_FLUSH_FLAG = os.path.join(_DATA_DIR, ".flush_buffer_request")
 
 # Reply control:
 # - "manual": bot speaks only after explicit force command ("f")

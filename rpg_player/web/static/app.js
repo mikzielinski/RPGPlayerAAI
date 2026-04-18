@@ -307,6 +307,11 @@ async function stopBot() {
   await refreshState();
 }
 
+async function flushBuffer() {
+  const res = await requestJson("/api/buffer/flush", { method: "POST" });
+  showToast(res.message || "Bufor przepłukany");
+}
+
 async function resetTarget(target) {
   const res = await requestJson("/api/reset", { method: "POST", body: JSON.stringify({ target }) });
   showToast(res.message || "Reset wykonany");
@@ -350,6 +355,7 @@ function wireEvents() {
 
   document.getElementById("startBotBtn").addEventListener("click", startBot);
   document.getElementById("stopBotBtn").addEventListener("click", stopBot);
+  document.getElementById("flushBufferBtn").addEventListener("click", flushBuffer);
   document.getElementById("validateBtn").addEventListener("click", validateSetup);
   document.getElementById("ingestBtn").addEventListener("click", ingestFiles);
   document.getElementById("saveEnvBtn").addEventListener("click", saveEnv);

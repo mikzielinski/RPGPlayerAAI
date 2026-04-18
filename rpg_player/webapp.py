@@ -589,6 +589,13 @@ def create_app() -> Flask:
         ok, message = manager.stop()
         return jsonify({"ok": ok, "message": message}), (200 if ok else 409)
 
+    @app.post("/api/buffer/flush")
+    def api_buffer_flush():
+        flag_path = Path(config.BUFFER_FLUSH_FLAG)
+        flag_path.parent.mkdir(parents=True, exist_ok=True)
+        flag_path.touch()
+        return jsonify({"ok": True, "message": "Sygnał przepłukania buforu wysłany."})
+
     return app
 
 

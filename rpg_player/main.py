@@ -1,6 +1,7 @@
 """Entry point — startup sequence and main session loop."""
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 import threading
@@ -40,6 +41,7 @@ class BotPlayer:
     consecutive_wait: int = 0
     last_speak_up_time: float = 0.0
     cooldown_sec: float = 45.0
+    _last_wait_hash: str = field(default="", compare=False, repr=False)
 
 
 class InputHandler:
@@ -234,15 +236,18 @@ def _process_bot_turn(
 
     if decision == "WAIT":
         if game_log:
-            game_log.log_event(
-                event="wait",
-                status="LISTENING",
-                decision=decision,
-                actor=char_name,
-                detail="Bot czeka na dalszy kontekst.",
-                buffer=buf,
-                known_players=registry.known_players,
-            )
+            buf_hash = hashlib.md5(buffer_text.encode()).hexdigest()
+            if buf_hash != player._last_wait_hash:
+                player._last_wait_hash = buf_hash
+                game_log.log_event(
+                    event="wait",
+                    status="LISTENING",
+                    decision=decision,
+                    actor=char_name,
+                    detail="Bot czeka na dalszy kontekst.",
+                    buffer=buf,
+                    known_players=registry.known_players,
+                )
         return
 
     if decision == "SPEAK_UP" and not config.ALLOW_PROACTIVE_SPEAK_UP:
@@ -496,6 +501,26 @@ def main() -> None:
                 break
 
             time.sleep(0.5)
+
+            # Buffer flush requested from web panel
+            flush_flag = Path(config.BUFFER_FLUSH_FLAG)
+            if flush_flag.exists():
+                try:
+                    flush_flag.unlink()
+                except OSError:
+                    pass
+                listener.flush_keeping_last()
+                dash.log("[yellow]Bufor przepłukany — zachowano ostatnią wypowiedź.[/yellow]")
+                if game_log:
+                    game_log.log_event(
+                        event="buffer_flushed",
+                        status="LISTENING",
+                        actor=char_name,
+                        detail="Bufor przepłukany z panelu webowego.",
+                        known_players=registry.known_players,
+                    )
+                for p in all_players:
+                    p._last_wait_hash = ""
 
             # Voice change
             if input_handler.consume_voice_next():

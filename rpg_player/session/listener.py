@@ -101,6 +101,15 @@ class Listener:
         """Record bot's own spoken turn into the buffer."""
         self._append_exchange(self._char_name, text)
 
+    def flush_keeping_last(self) -> None:
+        """Clear the buffer but retain the most recent utterance for context continuity."""
+        with self._lock:
+            if not self._buffer:
+                return
+            last = self._buffer[-1]
+            self._buffer.clear()
+            self._buffer.append(last)
+
     def listen_once(self) -> str:
         """Blocking: capture audio until silence, transcribe, return text.
 
@@ -113,7 +122,7 @@ class Listener:
         frames: list[np.ndarray] = []
         silent_chunks = 0
         silence_limit = int(self._silence_sec * _SAMPLE_RATE / _CHUNK_FRAMES)
-        energy_threshold = 300
+        energy_threshold = config.WHISPER_ENERGY_THRESHOLD
 
         with sd.InputStream(
             samplerate=_SAMPLE_RATE,
@@ -150,7 +159,7 @@ class Listener:
         frames: list[np.ndarray] = []
         silent_chunks = 0
         silence_limit = int(self._silence_sec * _SAMPLE_RATE / _CHUNK_FRAMES)
-        energy_threshold = 300
+        energy_threshold = config.WHISPER_ENERGY_THRESHOLD
 
         def callback(indata, frame_count, time_info, status):
             self._audio_q.put(indata.copy())
@@ -185,7 +194,7 @@ class Listener:
                                 initial_prompt=config.WHISPER_INITIAL_PROMPT,
                             )
                             text = result["text"].strip()
-                            if text and not self._muted:
+                            if text and len(text.split()) >= 2 and not self._muted:
                                 speaker = "gracz"
                                 if self._registry:
                                     detected = self._registry.process(text)
