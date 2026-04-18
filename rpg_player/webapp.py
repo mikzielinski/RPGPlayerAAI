@@ -276,6 +276,7 @@ def _system_status(process_manager: BotProcessManager) -> dict[str, Any]:
             "tts_voice": env_file.get("TTS_VOICE", config.TTS_VOICE),
             "openai_tts_model": env_file.get("OPENAI_TTS_MODEL", config.OPENAI_TTS_MODEL),
             "openai_tts_voice": env_file.get("OPENAI_TTS_VOICE", config.OPENAI_TTS_VOICE),
+            "openai_tts_format": env_file.get("OPENAI_TTS_FORMAT", config.OPENAI_TTS_FORMAT),
             "discord_enabled": _env_bool(env_file.get("DISCORD_ENABLED"), config.DISCORD_ENABLED),
             "discord_guild_id": env_file.get("DISCORD_GUILD_ID", config.DISCORD_GUILD_ID),
             "discord_text_channel_id": env_file.get("DISCORD_TEXT_CHANNEL_ID", config.DISCORD_TEXT_CHANNEL_ID),
@@ -415,6 +416,7 @@ def create_app() -> Flask:
         tts_voice = payload.get("tts_voice")
         openai_tts_model = payload.get("openai_tts_model")
         openai_tts_voice = payload.get("openai_tts_voice")
+        openai_tts_format = payload.get("openai_tts_format")
         discord_enabled = payload.get("discord_enabled")
         discord_token = payload.get("discord_bot_token")
         discord_guild = payload.get("discord_guild_id")
@@ -476,6 +478,12 @@ def create_app() -> Flask:
 
         if openai_tts_voice is not None:
             updates["OPENAI_TTS_VOICE"] = str(openai_tts_voice).strip() or None
+
+        if openai_tts_format is not None:
+            fmt = str(openai_tts_format).strip().lower()
+            if fmt and fmt not in config.OPENAI_TTS_ALLOWED_FORMATS:
+                return jsonify({"ok": False, "message": "Nieprawidlowy OPENAI_TTS_FORMAT."}), 400
+            updates["OPENAI_TTS_FORMAT"] = fmt or None
 
         if discord_enabled is not None:
             updates["DISCORD_ENABLED"] = "1" if _coerce_bool(discord_enabled) else "0"

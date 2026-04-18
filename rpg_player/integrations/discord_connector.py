@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from rpg_player import config
@@ -67,6 +67,10 @@ class DiscordConnector:
             self._state.messages.append(payload)
             if len(self._state.messages) > self._max_messages:
                 self._state.messages = self._state.messages[-self._max_messages :]
+
+    @staticmethod
+    def _utc_iso() -> str:
+        return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     def _snapshot_known_users(self) -> list[str]:
         with self._lock:
@@ -131,7 +135,7 @@ class DiscordConnector:
         """Ask Discord participants to map player -> character."""
         self._push_message(
             {
-                "time": datetime.utcnow().isoformat(),
+                "time": self._utc_iso(),
                 "author": "system",
                 "text": "Prosba o przedstawienie: imie gracza + postac.",
                 "channel": "system",
@@ -215,7 +219,7 @@ class DiscordConnector:
                 speaker = message.author.display_name
                 connector._push_message(
                     {
-                        "time": datetime.utcnow().isoformat(),
+                        "time": connector._utc_iso(),
                         "author": speaker,
                         "text": content,
                         "channel": getattr(message.channel, "name", ""),

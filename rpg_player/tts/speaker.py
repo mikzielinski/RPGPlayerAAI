@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import tempfile
+from functools import partial
 from pathlib import Path
 
 from rpg_player import config
@@ -99,7 +100,11 @@ class Speaker:
 
     def speak(self, text: str) -> None:
         """Blocking TTS playback."""
-        asyncio.run(self.speak_async(text))
+        try:
+            asyncio.run(self.speak_async(text))
+        except Exception as exc:
+            # TTS failures should not crash the whole session loop.
+            print(f"[tts] Blad syntezy mowy, pomijam odtworzenie: {exc}")
 
     async def speak_async(self, text: str) -> None:
         """Non-blocking TTS playback (awaitable)."""
@@ -171,22 +176,27 @@ class Speaker:
             timeout=config.OPENAI_TIMEOUT_SEC,
             max_retries=config.OPENAI_MAX_RETRIES,
         )
+        audio_format = (config.OPENAI_TTS_FORMAT or "mp3").strip().lower()
+        if audio_format not in config.OPENAI_TTS_ALLOWED_FORMATS:
+            audio_format = "mp3"
+
         # audio.speech.create is sync; run in executor to keep async flow.
+        base_kwargs = {
+            "model": config.OPENAI_TTS_MODEL,
+            "voice": self.current_voice or config.OPENAI_TTS_VOICE,
+            "input": text,
+            "speed": float(speed),
+        }
+
         loop = asyncio.get_running_loop()
         audio_bytes = await loop.run_in_executor(
             None,
-            lambda: client.audio.speech.create(
-                model=config.OPENAI_TTS_MODEL,
-                voice=self.current_voice or config.OPENAI_TTS_VOICE,
-                input=text,
-                format="mp3",
-                speed=float(speed),
-            ).read(),
+            partial(self._create_openai_tts_audio_bytes, client, base_kwargs, audio_format),
         )
         if not audio_bytes:
             return
 
-        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=f".{audio_format}", delete=False) as f:
             f.write(audio_bytes)
             tmp_path = f.name
 
@@ -196,6 +206,31 @@ class Speaker:
             sd.wait()
         finally:
             Path(tmp_path).unlink(missing_ok=True)
+
+    @staticmethod
+    def _create_openai_tts_audio_bytes(client, base_kwargs: dict[str, object], audio_format: str) -> bytes:
+        """Cross-SDK request helper for `client.audio.speech.create`.
+
+        SDK compatibility:
+        - newer SDKs: `response_format`
+        - some variants: `format`
+        - fallback: no explicit format argument
+        """
+        attempts = (
+            {"response_format": audio_format},
+            {"format": audio_format},
+            {},
+        )
+        last_type_error: TypeError | None = None
+        for extra in attempts:
+            try:
+                return client.audio.speech.create(**base_kwargs, **extra).read()
+            except TypeError as exc:
+                last_type_error = exc
+                continue
+        if last_type_error:
+            raise last_type_error
+        return b""
 
     # ------------------------------------------------------------------
     # Kokoro TTS backend
