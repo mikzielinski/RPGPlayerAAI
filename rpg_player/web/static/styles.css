@@ -206,6 +206,10 @@ body {
   line-height: 1.4;
 }
 
+.help-text strong {
+  color: #dfe8ff;
+}
+
 .subheading {
   margin: 14px 0 8px;
   font-size: 14px;
