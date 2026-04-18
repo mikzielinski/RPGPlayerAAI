@@ -22,6 +22,7 @@ AGENT_MAX_RETRIES = int(os.environ.get("AGENT_MAX_RETRIES", str(OPENAI_MAX_RETRI
 OPENAI_TTS_MODEL = os.environ.get("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
 OPENAI_TTS_VOICE = os.environ.get("OPENAI_TTS_VOICE", "alloy")
 OPENAI_TTS_FORMAT = os.environ.get("OPENAI_TTS_FORMAT", "mp3")
+OPENAI_TTS_ALLOWED_FORMATS = {"mp3", "wav", "opus", "flac", "pcm"}
 OPENAI_TTS_EMOTION_SPEED = {
     "anger": float(os.environ.get("OPENAI_TTS_SPEED_ANGER", "1.1")),
     "fear": float(os.environ.get("OPENAI_TTS_SPEED_FEAR", "1.12")),

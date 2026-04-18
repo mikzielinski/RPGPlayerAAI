@@ -171,6 +171,10 @@ class Speaker:
             timeout=config.OPENAI_TIMEOUT_SEC,
             max_retries=config.OPENAI_MAX_RETRIES,
         )
+        audio_format = (config.OPENAI_TTS_FORMAT or "mp3").strip().lower()
+        if audio_format not in config.OPENAI_TTS_ALLOWED_FORMATS:
+            audio_format = "mp3"
+
         # audio.speech.create is sync; run in executor to keep async flow.
         loop = asyncio.get_running_loop()
         audio_bytes = await loop.run_in_executor(
@@ -179,14 +183,14 @@ class Speaker:
                 model=config.OPENAI_TTS_MODEL,
                 voice=self.current_voice or config.OPENAI_TTS_VOICE,
                 input=text,
-                format="mp3",
+                format=audio_format,
                 speed=float(speed),
             ).read(),
         )
         if not audio_bytes:
             return
 
-        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=f".{audio_format}", delete=False) as f:
             f.write(audio_bytes)
             tmp_path = f.name
 
