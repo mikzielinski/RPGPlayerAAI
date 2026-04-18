@@ -37,8 +37,11 @@ function renderStatusGrid(status) {
   const rows = [
     ["Bot", bot.running ? `Dziala (PID ${bot.pid || "-"})` : "Zatrzymany"],
     ["Tryb odpowiedzi", env.response_mode || "-"],
+    ["Bufor", String(env.buffer_max_exchanges || "-")],
+    ["TTS", `${env.tts_backend || "-"} / ${env.tts_voice || "-"}`],
     ["Proaktywne SPEAK_UP", env.allow_proactive_speak_up ? "wlaczone" : "wylaczone"],
     ["Dodatkowi bot-gracze", env.enable_additional_ai_players ? "wlaczone" : "wylaczone"],
+    ["Discord", env.discord_enabled ? "wlaczony" : "wylaczony"],
     ["Postac", flags.has_character ? "OK" : "Brak"],
     ["Osobowosc", flags.has_personality ? "OK" : "Brak"],
     ["OPENAI_API_KEY", env.openai_api_key_masked || "brak"],
@@ -98,11 +101,24 @@ function setBotLogs(lines) {
   document.getElementById("botLogs").textContent = (lines || []).join("\n");
 }
 
+function setGameLog(entries, latestFile = "") {
+  const pretty = {
+    latest: latestFile,
+    entries,
+  };
+  document.getElementById("gameLogView").textContent = JSON.stringify(pretty, null, 2);
+}
+
+function setDiscordStatus(payload) {
+  document.getElementById("discordStatusView").textContent = JSON.stringify(payload || {}, null, 2);
+}
+
 async function refreshState() {
   const status = await requestJson("/api/state");
   state.lastStatus = status;
   renderStatusGrid(status);
   setBotLogs(status.bot?.logs || []);
+  setDiscordStatus(status.discord || {});
 
   if (!state.envFormDirty) {
     const env = status.env || {};
@@ -110,6 +126,15 @@ async function refreshState() {
     document.getElementById("responseMode").value = env.response_mode || "gm";
     document.getElementById("allowSpeakUp").checked = !!env.allow_proactive_speak_up;
     document.getElementById("enableExtraPlayers").checked = !!env.enable_additional_ai_players;
+    document.getElementById("bufferMaxExchanges").value = String(env.buffer_max_exchanges || 15);
+    document.getElementById("ttsBackend").value = env.tts_backend || "edge";
+    document.getElementById("ttsVoice").value = env.tts_voice || "";
+    document.getElementById("openaiTtsModel").value = env.openai_tts_model || "";
+    document.getElementById("openaiTtsVoice").value = env.openai_tts_voice || "";
+    document.getElementById("discordEnabled").checked = !!env.discord_enabled;
+    document.getElementById("discordGuildId").value = env.discord_guild_id || "";
+    document.getElementById("discordTextChannelId").value = env.discord_text_channel_id || "";
+    document.getElementById("discordVoiceChannelId").value = env.discord_voice_channel_id || "";
   }
 }
 
@@ -133,6 +158,16 @@ async function loadSessions() {
   renderSessions(res.sessions || []);
 }
 
+async function loadGameLog() {
+  const res = await requestJson("/api/game-log");
+  setGameLog(res.logs || [], res.latest || "");
+}
+
+async function loadDiscordStatus() {
+  const res = await requestJson("/api/discord");
+  setDiscordStatus(res || {});
+}
+
 async function saveJsonFromEditor(editorId, endpoint) {
   const raw = document.getElementById(editorId).value.trim();
   let data = {};
@@ -150,14 +185,34 @@ async function saveEnv() {
   const responseMode = document.getElementById("responseMode").value;
   const allowSpeakUp = document.getElementById("allowSpeakUp").checked;
   const enableExtraPlayers = document.getElementById("enableExtraPlayers").checked;
+  const bufferMaxExchanges = document.getElementById("bufferMaxExchanges").value;
+  const ttsBackend = document.getElementById("ttsBackend").value;
+  const ttsVoice = document.getElementById("ttsVoice").value.trim();
+  const openaiTtsModel = document.getElementById("openaiTtsModel").value.trim();
+  const openaiTtsVoice = document.getElementById("openaiTtsVoice").value.trim();
+  const discordEnabled = document.getElementById("discordEnabled").checked;
+  const discordBotToken = document.getElementById("discordBotToken").value.trim();
+  const discordGuildId = document.getElementById("discordGuildId").value.trim();
+  const discordTextChannelId = document.getElementById("discordTextChannelId").value.trim();
+  const discordVoiceChannelId = document.getElementById("discordVoiceChannelId").value.trim();
 
   const payload = {
     swearing_intensity: swearing,
     response_mode: responseMode,
     allow_proactive_speak_up: allowSpeakUp,
     enable_additional_ai_players: enableExtraPlayers,
+    buffer_max_exchanges: bufferMaxExchanges,
+    tts_backend: ttsBackend,
+    tts_voice: ttsVoice,
+    openai_tts_model: openaiTtsModel,
+    openai_tts_voice: openaiTtsVoice,
+    discord_enabled: discordEnabled,
+    discord_guild_id: discordGuildId,
+    discord_text_channel_id: discordTextChannelId,
+    discord_voice_channel_id: discordVoiceChannelId,
   };
   if (key) payload.openai_api_key = key;
+  if (discordBotToken) payload.discord_bot_token = discordBotToken;
 
   const res = await requestJson("/api/env", {
     method: "POST",
@@ -166,6 +221,7 @@ async function saveEnv() {
   state.envFormDirty = false;
   showToast(res.message || "Zapisano");
   document.getElementById("openaiKey").value = "";
+  document.getElementById("discordBotToken").value = "";
   await refreshState();
 }
 
@@ -179,6 +235,7 @@ async function validateSetup() {
 async function ingestFiles() {
   const res = await requestJson("/api/ingest", { method: "POST" });
   showToast(res.message || "Ingest gotowy");
+  await loadGameLog();
 }
 
 async function startBot() {
@@ -236,15 +293,35 @@ function wireEvents() {
     state.envFormDirty = true;
   };
 
-  document.getElementById("swearingIntensity").addEventListener("change", markEnvDirty);
-  document.getElementById("responseMode").addEventListener("change", markEnvDirty);
-  document.getElementById("allowSpeakUp").addEventListener("change", markEnvDirty);
-  document.getElementById("enableExtraPlayers").addEventListener("change", markEnvDirty);
+  [
+    "swearingIntensity",
+    "responseMode",
+    "allowSpeakUp",
+    "enableExtraPlayers",
+    "bufferMaxExchanges",
+    "ttsBackend",
+    "ttsVoice",
+    "openaiTtsModel",
+    "openaiTtsVoice",
+    "discordEnabled",
+    "discordGuildId",
+    "discordTextChannelId",
+    "discordVoiceChannelId",
+    "discordBotToken",
+    "openaiKey",
+  ].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("change", markEnvDirty);
+    el.addEventListener("input", markEnvDirty);
+  });
 
   document.getElementById("refreshStateBtn").addEventListener("click", async () => {
     await refreshState();
     await loadGameFiles();
     await loadSessions();
+    await loadGameLog();
+    await loadDiscordStatus();
   });
 
   document.getElementById("startBotBtn").addEventListener("click", startBot);
@@ -252,6 +329,7 @@ function wireEvents() {
   document.getElementById("validateBtn").addEventListener("click", validateSetup);
   document.getElementById("ingestBtn").addEventListener("click", ingestFiles);
   document.getElementById("saveEnvBtn").addEventListener("click", saveEnv);
+  document.getElementById("reloadGameLogBtn").addEventListener("click", loadGameLog);
 
   document.getElementById("loadCharacterBtn").addEventListener("click", loadCharacter);
   document.getElementById("saveCharacterBtn").addEventListener("click", async () => {
@@ -286,6 +364,7 @@ function wireEvents() {
       await refreshState();
       await loadGameFiles();
       await loadSessions();
+      await loadGameLog();
       if (resetTargetName === "character") document.getElementById("characterJson").value = "{}";
       if (resetTargetName === "personality") document.getElementById("personalityJson").value = "{}";
       return;
@@ -309,8 +388,20 @@ function wireEvents() {
 
 async function bootstrap() {
   wireEvents();
-  await Promise.all([refreshState(), loadCharacter(), loadPersonality(), loadGameFiles(), loadSessions()]);
-  setInterval(refreshState, 4000);
+  await Promise.all([
+    refreshState(),
+    loadCharacter(),
+    loadPersonality(),
+    loadGameFiles(),
+    loadSessions(),
+    loadGameLog(),
+    loadDiscordStatus(),
+  ]);
+  setInterval(async () => {
+    await refreshState();
+    await loadGameLog();
+    await loadDiscordStatus();
+  }, 4000);
 }
 
 bootstrap().catch((err) => {

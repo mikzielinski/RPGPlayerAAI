@@ -37,6 +37,17 @@
           <label for="openaiKey">OPENAI_API_KEY</label>
           <input id="openaiKey" type="password" placeholder="sk-..." />
         </div>
+
+        <div class="form-row">
+          <label for="bufferMaxExchanges">BUFFER_MAX_EXCHANGES</label>
+          <input id="bufferMaxExchanges" type="number" min="5" max="40" step="1" />
+          <p class="help-text">
+            Ile ostatnich wypowiedzi trafia do kontekstu decyzji i odpowiedzi.
+            Mniejszy bufor = szybciej, ale bot latwiej gubi kontekst.
+            Wiekszy bufor = lepsza pamiec rozmowy, ale wolniej i drozej tokenowo.
+          </p>
+        </div>
+
         <div class="form-row">
           <label for="swearingIntensity">SWEARING_INTENSITY</label>
           <select id="swearingIntensity">
@@ -46,6 +57,7 @@
             <option value="heavy">heavy</option>
           </select>
         </div>
+
         <div class="form-row">
           <label for="responseMode">RESPONSE_MODE</label>
           <select id="responseMode">
@@ -54,18 +66,74 @@
             <option value="auto">auto (stary autonomiczny tryb)</option>
           </select>
         </div>
+
+        <div class="form-row">
+          <label for="ttsBackend">TTS_BACKEND</label>
+          <select id="ttsBackend">
+            <option value="edge">edge</option>
+            <option value="openai">openai</option>
+            <option value="kokoro">kokoro</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label for="ttsVoice">TTS_VOICE</label>
+          <input id="ttsVoice" type="text" placeholder="np. pl-PL-MarekNeural albo alloy" />
+        </div>
+
+        <div class="form-row">
+          <label for="openaiTtsModel">OPENAI_TTS_MODEL</label>
+          <input id="openaiTtsModel" type="text" placeholder="gpt-4o-mini-tts" />
+        </div>
+
+        <div class="form-row">
+          <label for="openaiTtsVoice">OPENAI_TTS_VOICE</label>
+          <input id="openaiTtsVoice" type="text" placeholder="alloy / verse / ..." />
+        </div>
+
         <div class="form-row checkbox-row">
           <label>
             <input id="allowSpeakUp" type="checkbox" />
             ALLOW_PROACTIVE_SPEAK_UP (samodzielne wtracanie sie)
           </label>
         </div>
+
         <div class="form-row checkbox-row">
           <label>
             <input id="enableExtraPlayers" type="checkbox" />
             ENABLE_ADDITIONAL_AI_PLAYERS (dodatkowi bot-gracze)
           </label>
         </div>
+
+        <h3 class="subheading">Discord (MVP)</h3>
+
+        <div class="form-row checkbox-row">
+          <label>
+            <input id="discordEnabled" type="checkbox" />
+            DISCORD_ENABLED
+          </label>
+        </div>
+
+        <div class="form-row">
+          <label for="discordBotToken">DISCORD_BOT_TOKEN</label>
+          <input id="discordBotToken" type="password" placeholder="Bot token" />
+        </div>
+
+        <div class="form-row">
+          <label for="discordGuildId">DISCORD_GUILD_ID</label>
+          <input id="discordGuildId" type="text" placeholder="ID serwera" />
+        </div>
+
+        <div class="form-row">
+          <label for="discordTextChannelId">DISCORD_TEXT_CHANNEL_ID</label>
+          <input id="discordTextChannelId" type="text" placeholder="ID kanalu tekstowego" />
+        </div>
+
+        <div class="form-row">
+          <label for="discordVoiceChannelId">DISCORD_VOICE_CHANNEL_ID</label>
+          <input id="discordVoiceChannelId" type="text" placeholder="ID kanalu glosowego" />
+        </div>
+
         <div class="actions">
           <button id="saveEnvBtn" class="btn">Zapisz .env</button>
         </div>
@@ -116,6 +184,19 @@
       <section class="card">
         <h2>Log procesu bota</h2>
         <pre id="botLogs" class="console"></pre>
+      </section>
+
+      <section class="card">
+        <h2>Log stanu gry (JSONL)</h2>
+        <div class="actions">
+          <button id="reloadGameLogBtn" class="btn">Odswiez game log</button>
+        </div>
+        <pre id="gameLogView" class="console"></pre>
+      </section>
+
+      <section class="card">
+        <h2>Discord status (MVP)</h2>
+        <pre id="discordStatusView" class="console"></pre>
       </section>
     </main>
 

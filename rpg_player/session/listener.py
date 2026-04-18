@@ -41,6 +41,7 @@ class Listener:
         self._buffer: deque[dict] = deque()
         self._audio_q: queue.Queue[np.ndarray] = queue.Queue()
         self._running = False
+        self._muted = False
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
@@ -55,6 +56,14 @@ class Listener:
 
     def stop(self) -> None:
         self._running = False
+
+    def mute(self) -> None:
+        """Temporarily ignore microphone transcription in session mode."""
+        self._muted = True
+
+    def unmute(self) -> None:
+        """Resume microphone transcription in session mode."""
+        self._muted = False
 
     def get_buffer(self) -> list[dict]:
         with self._lock:
@@ -149,7 +158,7 @@ class Listener:
                                 initial_prompt=config.WHISPER_INITIAL_PROMPT,
                             )
                             text = result["text"].strip()
-                            if text:
+                            if text and not self._muted:
                                 speaker = "gracz"
                                 if self._registry:
                                     detected = self._registry.process(text)
