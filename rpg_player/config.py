@@ -22,6 +22,7 @@ AGENT_MAX_RETRIES = int(os.environ.get("AGENT_MAX_RETRIES", str(OPENAI_MAX_RETRI
 OPENAI_TTS_MODEL = os.environ.get("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
 OPENAI_TTS_VOICE = os.environ.get("OPENAI_TTS_VOICE", "alloy")
 OPENAI_TTS_FORMAT = os.environ.get("OPENAI_TTS_FORMAT", "mp3")
+OPENAI_TTS_ALLOWED_FORMATS = {"mp3", "wav", "opus", "flac", "pcm"}
 OPENAI_TTS_EMOTION_SPEED = {
     "anger": float(os.environ.get("OPENAI_TTS_SPEED_ANGER", "1.1")),
     "fear": float(os.environ.get("OPENAI_TTS_SPEED_FEAR", "1.12")),
@@ -34,6 +35,12 @@ OPENAI_TTS_EMOTION_SPEED = {
 WHISPER_MODEL = "base"  # or "small" for better accuracy
 SILENCE_THRESHOLD_SEC = 1.5
 WHISPER_LANGUAGE = "pl"
+WHISPER_INSECURE_SSL = os.environ.get("WHISPER_INSECURE_SSL", "0").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 WHISPER_INITIAL_PROMPT = (
     "Sesja RPG. Postacie: mag, wojownik, łotrzyk, kleryk. "
     "Słowa kluczowe: Mistrz Gry, MG, kość, rzut, d20, d6, "

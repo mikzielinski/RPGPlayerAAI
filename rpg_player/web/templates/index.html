@@ -91,6 +91,17 @@
           <input id="openaiTtsVoice" type="text" placeholder="alloy / verse / ..." />
         </div>
 
+        <div class="form-row">
+          <label for="openaiTtsFormat">OPENAI_TTS_FORMAT</label>
+          <select id="openaiTtsFormat">
+            <option value="mp3">mp3</option>
+            <option value="wav">wav</option>
+            <option value="opus">opus</option>
+            <option value="flac">flac</option>
+            <option value="pcm">pcm</option>
+          </select>
+        </div>
+
         <div class="form-row checkbox-row">
           <label>
             <input id="allowSpeakUp" type="checkbox" />
@@ -196,6 +207,9 @@
 
       <section class="card">
         <h2>Discord status (MVP)</h2>
+        <p class="help-text">
+          Po zapisaniu .env i uruchomieniu bota status powinien przejsc na <strong>connected: true</strong>.
+        </p>
         <pre id="discordStatusView" class="console"></pre>
       </section>
     </main>

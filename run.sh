@@ -34,6 +34,17 @@ else
     info "No .env file found — will check for API key below"
 fi
 
+# Whisper bootstrap in corporate/self-signed SSL environments.
+if [ -z "${WHISPER_INSECURE_SSL:-}" ]; then
+    warn "WHISPER_INSECURE_SSL not set — enabling fallback (1) for first-run model download reliability."
+    export WHISPER_INSECURE_SSL=1
+    if [ -f .env ]; then
+        grep -v "^WHISPER_INSECURE_SSL=" .env > .env.tmp && mv .env.tmp .env || true
+    fi
+    echo "WHISPER_INSECURE_SSL=1" >> .env
+    ok "Saved WHISPER_INSECURE_SSL=1 to .env (set to 0 later if your SSL chain is standard)."
+fi
+
 # ── Step 2 — System checks ────────────────────────────────────────────────────
 step "2/5" "System checks"
 

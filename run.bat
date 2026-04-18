@@ -21,6 +21,17 @@ if exist .env (
 ) else (
     echo   [..] No .env file -- will check for API key below
 )
+
+if "%WHISPER_INSECURE_SSL%"=="" (
+    echo   [WARN] WHISPER_INSECURE_SSL not set -- enabling 1 for first-run Whisper download reliability.
+    set "WHISPER_INSECURE_SSL=1"
+    if exist .env (
+        findstr /v /b "WHISPER_INSECURE_SSL=" .env > .env.tmp
+        move /y .env.tmp .env >nul
+    )
+    echo WHISPER_INSECURE_SSL=1>> .env
+    echo   [OK]  Saved WHISPER_INSECURE_SSL=1 to .env ^(set to 0 later if SSL chain is standard^)
+)
 echo.
 
 :: ── Step 2/5 — System checks ──────────────────────────────────────────────────

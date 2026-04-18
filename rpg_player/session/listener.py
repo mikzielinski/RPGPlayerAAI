@@ -7,6 +7,7 @@ instead of the generic "gracz" label.
 from __future__ import annotations
 
 import queue
+import ssl
 import threading
 import time
 from collections import deque
@@ -36,7 +37,21 @@ class Listener:
         self._char_name = char_name
         self._silence_sec = silence_sec
         self._max_exchanges = max_exchanges
-        self._model = whisper.load_model(model_name)
+        self._model = None
+        self._model_error = ""
+        try:
+            if config.WHISPER_INSECURE_SSL:
+                # Optional escape hatch for corporate/self-signed MITM environments.
+                ssl._create_default_https_context = ssl._create_unverified_context
+                print("[listener] WHISPER_INSECURE_SSL=1 -> pomijam weryfikacje certyfikatow SSL dla pobierania modelu.")
+            self._model = whisper.load_model(model_name)
+        except Exception as exc:
+            self._model_error = str(exc)
+            print(
+                "[listener] Nie udalo sie zaladowac modelu Whisper. "
+                "Przechodze na awaryjny tryb wpisywania tekstu podczas onboardingu. "
+                f"Szczegoly: {exc}"
+            )
         self._registry = registry
         self._buffer: deque[dict] = deque()
         self._audio_q: queue.Queue[np.ndarray] = queue.Queue()
@@ -50,6 +65,13 @@ class Listener:
 
     def start(self) -> None:
         """Begin continuous microphone capture in a background thread."""
+        if self._model is None:
+            print(
+                "[listener] Brak aktywnego modelu Whisper — nasluch mikrofonu jest niedostepny. "
+                "Ustaw certyfikaty SSL lub pobierz model lokalnie."
+            )
+            self._running = False
+            return
         self._running = True
         self._thread = threading.Thread(target=self._capture_loop, daemon=True)
         self._thread.start()
@@ -83,6 +105,10 @@ class Listener:
 
         Used during onboarding (not the streaming session loop).
         """
+        if self._model is None:
+            typed = input("Whisper niedostepny. Wpisz odpowiedz i nacisnij Enter: ").strip()
+            return typed
+
         frames: list[np.ndarray] = []
         silent_chunks = 0
         silence_limit = int(self._silence_sec * _SAMPLE_RATE / _CHUNK_FRAMES)
