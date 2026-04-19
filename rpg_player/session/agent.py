@@ -59,6 +59,7 @@ def _build_system_prompt(
     session_context: str = "",
     known_players: Optional[list[str]] = None,
     general_context: str = "",
+    game_context: str = "",
 ) -> str:
     base = _SYSTEM_TEMPLATE.format(
         table_archetype=personality.get("table_archetype", "neutralny"),
@@ -76,6 +77,8 @@ def _build_system_prompt(
         signature_phrases=", ".join(character.get("signature_phrases", [])),
         trigger_mode=trigger_mode,
     )
+    if game_context:
+        base += "\n\n" + game_context
     if known_players:
         base += f"\n\nGracze przy stole (znane imiona): {', '.join(known_players)}"
     if session_context:
@@ -180,6 +183,7 @@ def run_agent(
     behavior_instructions: str = "",
     session_context: str = "",
     general_context: str = "",
+    game_context: str = "",
     known_players: Optional[list[str]] = None,
     token_tracker=None,
 ) -> str:
@@ -194,6 +198,7 @@ def run_agent(
         session_context=session_context,
         known_players=known_players,
         general_context=general_context,
+        game_context=game_context,
     )
     if behavior_instructions:
         system_prompt += "\n" + behavior_instructions

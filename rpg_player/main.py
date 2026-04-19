@@ -25,6 +25,7 @@ from rpg_player.session.speaker_registry import SpeakerRegistry
 from rpg_player.session.token_tracker import TokenTracker
 from rpg_player.session.game_log import GameLog
 from rpg_player.session.memory_manager import MemoryManager
+from rpg_player.session import game_detector
 from rpg_player.tts.speaker import Speaker
 from rpg_player.session.listener import Listener
 from rpg_player.session.classifier import Classifier
@@ -260,6 +261,7 @@ def _process_bot_turn(
     discord_connector: DiscordConnector | None = None,
     session_context: str = "",
     general_context: str = "",
+    game_context: str = "",
     force_turn: bool = False,
 ) -> None:
     """Classify and optionally respond for one BotPlayer. Mutates player state."""
@@ -361,6 +363,7 @@ def _process_bot_turn(
             behavior_instructions=behavior_instructions,
             session_context=session_context,
             general_context=general_context,
+            game_context=game_context,
             known_players=registry.known_players,
             token_tracker=player.token_tracker,
         )
@@ -478,6 +481,29 @@ def main() -> None:
         dash.log(f"Postac '{character.get('name')}' zapisana.")
     else:
         dash.log(f"Postac '{character.get('name')}' zaladowana.")
+
+    # 3b. Load game type; ask for campaign intro if not yet provided
+    game_type = game_detector.load()
+    if game_type:
+        dash.log(
+            f"Typ gry: [cyan]{game_type.get('system', '?')}[/cyan] "
+            f"/ {game_type.get('genre')} / {game_type.get('tone')}"
+        )
+        if not game_type.get("campaign_intro") and vectorstore:
+            dash.log("Pytam o intro kampanii...")
+            tts.speak(
+                "Zanim zaczniemy — opisz krótko kampanię. "
+                "Gdzie zaczyna się akcja i o czym jest ta gra?"
+            )
+            _intro_listener = Listener()
+            intro_text = _intro_listener.listen_once()
+            if intro_text and len(intro_text.split()) >= 3:
+                game_detector.save_intro(intro_text)
+                game_type = game_detector.load() or game_type
+                dash.log(f"[green]Intro kampanii zapisane.[/green]")
+            else:
+                dash.log("[dim]Intro kampanii pominięte.[/dim]")
+    game_context = game_detector.build_game_context(game_type) if game_type else ""
 
     # 4. Primary bot player
     talk_freq = personality.get("talk_frequency", "umiarkowanie")
@@ -657,6 +683,7 @@ def main() -> None:
                     discord_connector=discord_connector,
                     session_context=session_context,
                     general_context=general_context,
+                    game_context=game_context,
                     force_turn=(force and i == 0),
                 )
                 # Brief gap between multiple AI players speaking

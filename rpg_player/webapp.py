@@ -33,6 +33,7 @@ GAME_FILES_PATH = Path(config.GAME_FILES_DIR)
 CHROMA_PATH = Path(config.CHROMA_DIR)
 SESSIONS_PATH = Path(config.SESSIONS_DIR)
 GENERAL_CONTEXT_PATH = Path(config.GENERAL_CONTEXT_FILE)
+GAME_TYPE_PATH = Path(config.GAME_TYPE_FILE)
 
 SUPPORTED_GAME_EXTENSIONS = {".pdf", ".docx", ".xlsx"}
 
@@ -279,7 +280,9 @@ def _system_status(process_manager: BotProcessManager) -> dict[str, Any]:
             "game_files_count": len(_list_game_files()),
             "sessions_count": len(sessions),
             "buffer_current": buffer_current,
+            "has_game_type": GAME_TYPE_PATH.exists(),
         },
+        "game_type": _safe_read_json(GAME_TYPE_PATH)[0] or {},
         "env": {
             "openai_api_key_masked": _mask_key(effective_env.get("OPENAI_API_KEY", "")),
             "swearing_intensity": env_file.get("SWEARING_INTENSITY", config.SWEARING_INTENSITY),

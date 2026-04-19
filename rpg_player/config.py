@@ -69,6 +69,9 @@ BUFFER_FLUSH_THRESHOLD = float(os.environ.get("BUFFER_FLUSH_THRESHOLD", "0.95"))
 # Three-tier memory: persistent general context JSON file.
 GENERAL_CONTEXT_FILE = os.path.join(_DATA_DIR, "context_general.json")
 
+# Detected game type / genre / intro (set automatically by game_detector).
+GAME_TYPE_FILE = os.path.join(_DATA_DIR, "game_type.json")
+
 # Reply control:
 # - "manual": bot speaks only after explicit force command ("f")
 # - "gm": bot replies when directly addressed by GM/player, otherwise waits

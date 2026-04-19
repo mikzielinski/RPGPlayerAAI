@@ -16,6 +16,7 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
 
 from rpg_player import config
+from rpg_player.session import game_detector
 
 _SUPPORTED = {".docx", ".pdf", ".xlsx"}
 _MTIME_CACHE = "data/chroma_db/.mtime_cache.json"
@@ -103,4 +104,14 @@ def ingest_game_files(
 
     _save_mtime_cache(new_cache)
     print(f"[ingest] Zaindeksowano {len(chunks)} fragmentów z {len(files)} pliku/ów.")
+
+    # Auto-detect game system/genre from the loaded document texts
+    try:
+        print("[ingest] Wykrywam typ gry z dokumentów...")
+        doc_texts = [d.page_content for d in all_docs if d.page_content.strip()]
+        result = game_detector.detect_and_save(doc_texts)
+        print(f"[ingest] Typ gry: {result.get('system')} / {result.get('genre')} / {result.get('tone')}")
+    except Exception as exc:
+        print(f"[ingest] Błąd detekcji typu gry (niekrytyczny): {exc}")
+
     return vectorstore
