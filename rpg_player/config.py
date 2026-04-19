@@ -177,3 +177,11 @@ DISCORD_BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
 DISCORD_GUILD_ID = os.environ.get("DISCORD_GUILD_ID", "").strip()
 DISCORD_TEXT_CHANNEL_ID = os.environ.get("DISCORD_TEXT_CHANNEL_ID", "").strip()
 DISCORD_VOICE_CHANNEL_ID = os.environ.get("DISCORD_VOICE_CHANNEL_ID", "").strip()
+# When True, skip TTS and microphone — bot communicates via Discord text only.
+# Defaults to True when DISCORD_ENABLED is set (can be overridden to 0 for hybrid voice+Discord).
+DISCORD_TEXT_ONLY = os.environ.get("DISCORD_TEXT_ONLY", "1" if os.environ.get("DISCORD_ENABLED", "0") in {"1", "true", "yes", "on"} else "0").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}

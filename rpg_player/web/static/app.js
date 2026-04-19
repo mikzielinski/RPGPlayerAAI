@@ -391,6 +391,7 @@ async function refreshState() {
     _setVal("openaiTtsVoice", env.openai_tts_voice || "");
     _setVal("openaiTtsFormat", env.openai_tts_format || "mp3");
     _setChecked("discordEnabled", !!env.discord_enabled);
+    _setChecked("discordTextOnly", env.discord_text_only !== false);
     _setVal("discordGuildId", env.discord_guild_id || "");
     _setVal("discordTextChannelId", env.discord_text_channel_id || "");
     _setVal("discordVoiceChannelId", env.discord_voice_channel_id || "");
@@ -534,6 +535,7 @@ function _collectEnvPayload() {
 function _collectDiscordPayload() {
   return {
     discord_enabled: document.getElementById("discordEnabled").checked,
+    discord_text_only: document.getElementById("discordTextOnly")?.checked ?? true,
     discord_guild_id: (document.getElementById("discordGuildId").value || "").trim(),
     discord_text_channel_id: (document.getElementById("discordTextChannelId").value || "").trim(),
     discord_voice_channel_id: (document.getElementById("discordVoiceChannelId").value || "").trim(),

@@ -308,6 +308,7 @@ def _system_status(process_manager: BotProcessManager) -> dict[str, Any]:
             "discord_guild_id": env_file.get("DISCORD_GUILD_ID", config.DISCORD_GUILD_ID),
             "discord_text_channel_id": env_file.get("DISCORD_TEXT_CHANNEL_ID", config.DISCORD_TEXT_CHANNEL_ID),
             "discord_voice_channel_id": env_file.get("DISCORD_VOICE_CHANNEL_ID", config.DISCORD_VOICE_CHANNEL_ID),
+            "discord_text_only": _env_bool(env_file.get("DISCORD_TEXT_ONLY"), config.DISCORD_TEXT_ONLY),
         },
         "discord": _discord_status(),
     }
@@ -531,8 +532,13 @@ def create_app() -> Flask:
                 return jsonify({"ok": False, "message": "Nieprawidlowy OPENAI_TTS_FORMAT."}), 400
             updates["OPENAI_TTS_FORMAT"] = fmt or None
 
+        discord_text_only = payload.get("discord_text_only")
+
         if discord_enabled is not None:
             updates["DISCORD_ENABLED"] = "1" if _coerce_bool(discord_enabled) else "0"
+
+        if discord_text_only is not None:
+            updates["DISCORD_TEXT_ONLY"] = "1" if _coerce_bool(discord_text_only) else "0"
 
         if discord_token is not None:
             token = str(discord_token).strip()

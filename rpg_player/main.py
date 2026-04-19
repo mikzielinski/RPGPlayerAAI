@@ -392,14 +392,16 @@ def _process_bot_turn(
                 buffer=buf,
                 known_players=registry.known_players,
             )
-        tts.speak("Dobra, tym razem poczekam.")
+        if not config.DISCORD_TEXT_ONLY:
+            tts.speak("Dobra, tym razem poczekam.")
         dash.update(status="LISTENING", error="")
         return
 
     if response:
         dash.update(status="SPEAKING", last_response=response)
         dash.log(f"{char_name}: {response[:80]}{'...' if len(response) > 80 else ''}")
-        tts.speak(response)
+        if not config.DISCORD_TEXT_ONLY:
+            tts.speak(response)
         listener.add_bot_turn(response)
         if game_log:
             game_log.log_event(
@@ -421,7 +423,8 @@ def _process_bot_turn(
         warn_text = player.token_tracker.check_warn()
         if warn_text:
             dash.log(f"[yellow]Token limit: {warn_text[:60]}[/yellow]")
-            tts.speak(warn_text)
+            if not config.DISCORD_TEXT_ONLY:
+                tts.speak(warn_text)
 
         dash.update(token_summary=player.token_tracker.summary())
 
@@ -503,10 +506,11 @@ def main() -> None:
         )
         if not game_type.get("campaign_intro") and vectorstore:
             dash.log("Pytam o intro kampanii...")
-            tts.speak(
-                "Zanim zaczniemy — opisz krótko kampanię. "
-                "Gdzie zaczyna się akcja i o czym jest ta gra?"
-            )
+            if not config.DISCORD_TEXT_ONLY:
+                tts.speak(
+                    "Zanim zaczniemy — opisz krótko kampanię. "
+                    "Gdzie zaczyna się akcja i o czym jest ta gra?"
+                )
             _intro_listener = Listener()
             intro_text = _intro_listener.listen_once()
             if intro_text and len(intro_text.split()) >= 3:
@@ -580,12 +584,16 @@ def main() -> None:
 
     # 6. Start listener and session
     listener = Listener(char_name=char_name, registry=registry)
-    # Apply saved mic-mute state before starting (persists across restarts)
-    if Path(config.MIC_MUTE_FLAG).exists():
+    # Discord text-only mode: mute mic permanently (no audio I/O needed)
+    if config.DISCORD_TEXT_ONLY:
+        listener.mute()
+    elif Path(config.MIC_MUTE_FLAG).exists():
+        # Apply saved mic-mute state before starting (persists across restarts)
         listener.mute()
     listener.start()
 
-    tts.speak(f"Gotowy. Jestem {char_name}. Zaczynamy sesje.")
+    if not config.DISCORD_TEXT_ONLY:
+        tts.speak(f"Gotowy. Jestem {char_name}. Zaczynamy sesje.")
     dash.update(status="LISTENING")
     mic_mode = "CZAT" if listener.is_muted() else "GŁOS"
     dash.log(f"Sesja aktywna — {char_name} · cooldown: {cooldown_sec}s · tryb: {mic_mode}")

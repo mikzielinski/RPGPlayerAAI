@@ -421,29 +421,53 @@
             </label>
           </div>
 
+          <div class="form-row checkbox-row">
+            <label class="toggle-label">
+              <input id="discordTextOnly" type="checkbox" class="toggle" checked />
+              <span class="toggle-track"></span>
+              DISCORD_TEXT_ONLY — tylko tekst (brak TTS, brak mikrofonu)
+            </label>
+            <p class="help-text">Zalecane: bot przyjmuje i wysyła wiadomości tekstem przez kanał Discord. Wyłącz tylko jeśli chcesz równoległe TTS na komputerze.</p>
+          </div>
+
           <div class="form-row">
             <label for="discordBotToken">Token bota (DISCORD_BOT_TOKEN)</label>
             <input id="discordBotToken" type="password" placeholder="Bot token z Discord Developer Portal" autocomplete="off" />
+            <p class="help-text">Wygeneruj/zresetuj token w <strong>Discord Developer Portal → Twoja aplikacja → Bot → Reset Token</strong>.</p>
           </div>
 
           <div class="form-row">
             <label for="discordGuildId">ID serwera (DISCORD_GUILD_ID)</label>
             <input id="discordGuildId" type="text" placeholder="np. 1234567890123456789" />
-            <p class="help-text">Prawy klik na nazwę serwera → Kopiuj ID serwera (tryb dewelopera musi być włączony).</p>
+            <p class="help-text">Prawy klik na nazwę serwera → Kopiuj ID serwera (tryb dewelopera musi być włączony w Ustawieniach → Zaawansowane).</p>
           </div>
 
           <div class="form-row">
             <label for="discordTextChannelId">ID kanału tekstowego (DISCORD_TEXT_CHANNEL_ID)</label>
             <input id="discordTextChannelId" type="text" placeholder="ID kanału #rpg-session" />
+            <p class="help-text">Prawy klik na kanał → Kopiuj ID kanału.</p>
           </div>
 
           <div class="form-row">
             <label for="discordVoiceChannelId">ID kanału głosowego (DISCORD_VOICE_CHANNEL_ID)</label>
-            <input id="discordVoiceChannelId" type="text" placeholder="ID kanału głosowego" />
+            <input id="discordVoiceChannelId" type="text" placeholder="ID kanału głosowego (opcjonalnie)" />
           </div>
 
           <div class="actions mt-2">
             <button id="saveDiscordBtn" class="btn btn-primary">Zapisz konfigurację Discord</button>
+          </div>
+
+          <div class="card mt-2" style="background:var(--bg-secondary);border:1px solid var(--border)">
+            <div class="card-header"><h3>Jak dodać bota do serwera</h3></div>
+            <ol class="help-text" style="padding-left:1.2rem;line-height:1.8">
+              <li>Idź na <strong>discord.com/developers/applications</strong></li>
+              <li>Wybierz swoją aplikację → <strong>OAuth2 → URL Generator</strong></li>
+              <li>Zaznacz scope: <code>bot</code></li>
+              <li>Zaznacz uprawnienia: <code>Read Messages</code>, <code>Send Messages</code>, <code>View Channels</code>, <code>Read Message History</code></li>
+              <li>Skopiuj wygenerowany URL i otwórz w przeglądarce</li>
+              <li>Wybierz swój serwer i kliknij <strong>Autoryzuj</strong></li>
+              <li>W <strong>Bot → Privileged Gateway Intents</strong> włącz: <code>Message Content Intent</code>, <code>Server Members Intent</code></li>
+            </ol>
           </div>
         </section>
 
@@ -454,7 +478,7 @@
           </div>
           <p class="help-text mb-2">
             Po zapisaniu konfiguracji i uruchomieniu bota status powinien przejść na
-            <strong>connected: true</strong>. Bot wejdzie na kanał głosowy i zapyta graczy o prezentację postaci.
+            <strong>connected: true</strong>. Bot napisze powitanie na kanale tekstowym i będzie odpowiadał na wiadomości.
           </p>
           <pre id="discordStatusView" class="console console-tall"></pre>
         </section>
