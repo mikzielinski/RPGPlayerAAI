@@ -569,6 +569,7 @@ async function saveDiscord() {
   const token = (document.getElementById("discordBotToken").value || "").trim();
   if (token) payload.discord_bot_token = token;
   const res = await requestJson("/api/env", { method: "POST", body: JSON.stringify(payload) });
+  state.envFormDirty = false;
   showToast(res.message || "Zapisano Discord");
   document.getElementById("discordBotToken").value = "";
   await loadDiscordStatus();
@@ -948,6 +949,8 @@ function wireEvents() {
     "whisperLanguage", "whisperInsecureSsl", "swearingIntensity", "responseMode", "allowSpeakUp",
     "enableExtraPlayers", "ttsBackend", "ttsVoice", "openaiTtsModel", "openaiTtsVoice",
     "openaiTtsFormat", "openaiKey",
+    "discordEnabled", "discordTextOnly", "discordGuildId", "discordTextChannelId",
+    "discordVoiceChannelId", "discordBotToken",
   ].forEach((id) => {
     const el = document.getElementById(id);
     if (el) { el.addEventListener("change", markDirty); el.addEventListener("input", markDirty); }
