@@ -34,7 +34,8 @@
             <h2>Status systemu</h2>
             <div id="botStatusBadge" class="badge badge-off">Zatrzymany</div>
           </div>
-          <div id="statusGrid" class="status-grid"></div>
+          <div id="healthRow" class="health-row"></div>
+          <div id="statusGrid" class="status-grid mt-2"></div>
         </section>
 
         <section class="card">
@@ -46,10 +47,19 @@
             <button id="ingestBtn" class="btn">⬆ Ingest plików</button>
           </div>
           <div class="section-divider mt-2">Bufor kontekstu</div>
-          <div class="actions">
+          <div class="buffer-bar-wrap">
+            <div class="buffer-bar-label">
+              <span>Wypełnienie buforu</span>
+              <span id="bufferBarText">0 / 15</span>
+            </div>
+            <div class="progress-track">
+              <div id="bufferBar" class="progress-fill" style="width:0%"></div>
+            </div>
+          </div>
+          <div class="actions mt-2">
             <button id="flushBufferBtn" class="btn btn-warning">⟳ Przepłucz bufor</button>
           </div>
-          <p class="help-text">Czyści bufor rozmowy, zachowując ostatnią wypowiedź. Przydatne gdy bot utknął lub nasłuchuje szumów.</p>
+          <p class="help-text">Czyści bufor rozmowy, zachowując ostatnią wypowiedź.</p>
           <pre id="commandOutput" class="console mt-2"></pre>
         </section>
 
@@ -256,10 +266,31 @@
 
         <section class="card span-2">
           <div class="card-header">
-            <h2>Log stanu gry (JSONL)</h2>
+            <h2>Log stanu gry <span id="logCount" class="log-count"></span></h2>
             <button id="reloadGameLogBtn" class="btn btn-sm">Odśwież</button>
           </div>
-          <pre id="gameLogView" class="console console-tall"></pre>
+          <div class="log-filters">
+            <input id="logFilterText" type="text" placeholder="Szukaj w szczegółach…" class="filter-input" />
+            <select id="logFilterEvent"><option value="">Wszystkie zdarzenia</option></select>
+            <select id="logFilterActor"><option value="">Wszyscy aktorzy</option></select>
+            <button id="logFilterClear" class="btn btn-sm btn-ghost">✕ Wyczyść</button>
+          </div>
+          <div class="table-wrap">
+            <table id="gameLogTable" class="log-table">
+              <thead>
+                <tr>
+                  <th data-sort="timestamp">Czas</th>
+                  <th data-sort="event">Zdarzenie</th>
+                  <th data-sort="actor">Aktor</th>
+                  <th data-sort="status">Status</th>
+                  <th>Szczegóły</th>
+                </tr>
+              </thead>
+              <tbody id="gameLogBody">
+                <tr><td colspan="5" class="log-empty">Ładowanie…</td></tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
       </div>

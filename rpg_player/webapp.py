@@ -219,6 +219,18 @@ def _list_game_files() -> list[dict[str, Any]]:
     return files
 
 
+def _get_buffer_current(game_logs: list[Path]) -> int:
+    """Return the most recently observed buffer size from the game log."""
+    if not game_logs:
+        return 0
+    tail = GameLog.tail(game_logs[0], limit=30)
+    for entry in reversed(tail):
+        bt = entry.get("payload", {}).get("buffer_tail")
+        if isinstance(bt, list):
+            return len(bt)
+    return 0
+
+
 def _discord_status() -> dict[str, Any]:
     connector = DiscordConnector(
         enabled=config.DISCORD_ENABLED,
@@ -244,6 +256,7 @@ def _system_status(process_manager: BotProcessManager) -> dict[str, Any]:
     tts_backend = (env_file.get("TTS_BACKEND") or config.TTS_BACKEND).strip().lower()
     game_logs = GameLog.list_logs()
     latest_game_log = str(game_logs[0]) if game_logs else ""
+    buffer_current = _get_buffer_current(game_logs)
 
     return {
         "bot": process_manager.snapshot(),
@@ -261,6 +274,7 @@ def _system_status(process_manager: BotProcessManager) -> dict[str, Any]:
             "has_openai_key": bool(effective_env.get("OPENAI_API_KEY", "").strip()),
             "game_files_count": len(_list_game_files()),
             "sessions_count": len(sessions),
+            "buffer_current": buffer_current,
         },
         "env": {
             "openai_api_key_masked": _mask_key(effective_env.get("OPENAI_API_KEY", "")),

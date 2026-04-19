@@ -1,6 +1,9 @@
 const state = {
   lastStatus: null,
   envFormDirty: false,
+  gameLogs: [],
+  gameLogSort: { col: "timestamp", dir: "desc" },
+  gameLogFilter: { text: "", event: "", actor: "" },
 };
 
 // ── Tabs ────────────────────────────────────────────────────────────
@@ -54,7 +57,51 @@ function sizeHuman(bytes) {
   return `${bytes} B`;
 }
 
-// ── Status rendering ─────────────────────────────────────────────────
+// ── Health row ───────────────────────────────────────────────────────
+function renderHealthRow(status) {
+  const el = document.getElementById("healthRow");
+  if (!el) return;
+  const flags = status.flags || {};
+  const bot = status.bot || {};
+
+  const checks = [
+    { label: "Bot", ok: bot.running, val: bot.running ? `Działa (PID ${bot.pid || "?"})` : "Zatrzymany" },
+    { label: "API Key", ok: flags.has_openai_key, val: flags.has_openai_key ? "Skonfigurowany" : "Brak klucza" },
+    { label: "Postać", ok: flags.has_character, val: flags.has_character ? "Załadowana" : "Brak" },
+    { label: "Osobowość", ok: flags.has_personality, val: flags.has_personality ? "Załadowana" : "Brak" },
+    {
+      label: "Pliki gry",
+      ok: (flags.game_files_count || 0) > 0,
+      val: `${flags.game_files_count || 0} plik${(flags.game_files_count || 0) === 1 ? "" : "ów"}`,
+    },
+  ];
+
+  el.innerHTML = checks
+    .map(
+      (c) =>
+        `<div class="health-item ${c.ok ? "health-ok" : "health-fail"}">
+          <span class="health-dot"></span>
+          <span class="health-label">${c.label}</span>
+          <span class="health-val">${c.val}</span>
+        </div>`,
+    )
+    .join("");
+}
+
+// ── Buffer progress bar ──────────────────────────────────────────────
+function renderBufferBar(status) {
+  const bar = document.getElementById("bufferBar");
+  const txt = document.getElementById("bufferBarText");
+  if (!bar || !txt) return;
+  const cur = (status.flags || {}).buffer_current || 0;
+  const max = (status.env || {}).buffer_max_exchanges || 15;
+  const pct = Math.min(100, Math.round((cur / max) * 100));
+  bar.style.width = `${pct}%`;
+  txt.textContent = `${cur} / ${max}`;
+  bar.className = "progress-fill" + (pct >= 90 ? " buf-high" : pct >= 60 ? " buf-mid" : "");
+}
+
+// ── Status grid ──────────────────────────────────────────────────────
 function renderStatusGrid(status) {
   const el = document.getElementById("statusGrid");
   const badge = document.getElementById("botStatusBadge");
@@ -102,6 +149,153 @@ function renderStatusGrid(status) {
     .join("");
 }
 
+// ── Game log table ───────────────────────────────────────────────────
+const _EVENT_ROW_CLASS = {
+  wait: "log-row-dim",
+  startup_ingest: "log-row-dim",
+  bot_response: "log-row-success",
+  session_ready: "log-row-success",
+  agent_error: "log-row-danger",
+  shutdown_requested: "log-row-warning",
+  buffer_flushed: "log-row-warning",
+  blocked_speak_up: "log-row-dim",
+  cooldown_block: "log-row-dim",
+};
+
+function _normalizeLogEntry(entry) {
+  const p = entry.payload || {};
+  const event = p.event || (entry.type !== "state_trace" ? entry.type : "");
+  return {
+    timestamp: entry.timestamp || "",
+    type: entry.type || "",
+    event,
+    actor: p.actor || entry.speaker || "",
+    status: p.status || "",
+    detail: p.detail || entry.text || "",
+    _raw: entry,
+  };
+}
+
+function _populateLogSelects(rows) {
+  const evSel = document.getElementById("logFilterEvent");
+  const acSel = document.getElementById("logFilterActor");
+  if (!evSel || !acSel) return;
+
+  const events = [...new Set(rows.map((r) => r.event).filter(Boolean))].sort();
+  const actors = [...new Set(rows.map((r) => r.actor).filter(Boolean))].sort();
+
+  const curEv = evSel.value;
+  const curAc = acSel.value;
+
+  evSel.innerHTML =
+    `<option value="">Wszystkie zdarzenia</option>` +
+    events.map((e) => `<option value="${e}"${e === curEv ? " selected" : ""}>${e}</option>`).join("");
+
+  acSel.innerHTML =
+    `<option value="">Wszyscy aktorzy</option>` +
+    actors.map((a) => `<option value="${a}"${a === curAc ? " selected" : ""}>${a}</option>`).join("");
+}
+
+function _redrawLogTable() {
+  const tbody = document.getElementById("gameLogBody");
+  const countEl = document.getElementById("logCount");
+  if (!tbody) return;
+
+  let rows = state.gameLogs.map(_normalizeLogEntry);
+
+  // Filter
+  const { text, event, actor } = state.gameLogFilter;
+  if (text) rows = rows.filter((r) => r.detail.toLowerCase().includes(text.toLowerCase()) || r.event.toLowerCase().includes(text.toLowerCase()));
+  if (event) rows = rows.filter((r) => r.event === event);
+  if (actor) rows = rows.filter((r) => r.actor === actor);
+
+  // Sort
+  const { col, dir } = state.gameLogSort;
+  rows = [...rows].sort((a, b) => {
+    const av = a[col] || "";
+    const bv = b[col] || "";
+    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+    return dir === "asc" ? cmp : -cmp;
+  });
+
+  if (countEl) countEl.textContent = `(${rows.length})`;
+
+  // Update sort indicators on headers
+  document.querySelectorAll(".log-table th[data-sort]").forEach((th) => {
+    th.classList.remove("sort-asc", "sort-desc");
+    if (th.dataset.sort === col) th.classList.add(dir === "asc" ? "sort-asc" : "sort-desc");
+  });
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="log-empty">Brak wpisów</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows
+    .map((r) => {
+      const t = r.timestamp ? r.timestamp.substring(11, 19) : "";
+      const rowCls = _EVENT_ROW_CLASS[r.event] || "";
+      const detail = r.detail.length > 140 ? `${r.detail.substring(0, 140)}…` : r.detail;
+      const safeDetail = detail.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      const safeTitle = r.detail.replace(/"/g, "&quot;").replace(/&/g, "&amp;");
+      const badgeCls = `ev-${r.event || r.type}`;
+      return `<tr class="${rowCls}">
+        <td class="log-time">${t}</td>
+        <td><span class="log-badge ${badgeCls}">${r.event || r.type}</span></td>
+        <td>${r.actor}</td>
+        <td>${r.status}</td>
+        <td class="log-detail" title="${safeTitle}">${safeDetail}</td>
+      </tr>`;
+    })
+    .join("");
+}
+
+function renderGameLogTable(entries) {
+  state.gameLogs = entries || [];
+  _populateLogSelects(state.gameLogs.map(_normalizeLogEntry));
+  _redrawLogTable();
+}
+
+function initLogTableEvents() {
+  document.querySelectorAll(".log-table th[data-sort]").forEach((th) => {
+    th.addEventListener("click", () => {
+      const col = th.dataset.sort;
+      if (state.gameLogSort.col === col) {
+        state.gameLogSort.dir = state.gameLogSort.dir === "asc" ? "desc" : "asc";
+      } else {
+        state.gameLogSort = { col, dir: "asc" };
+      }
+      _redrawLogTable();
+    });
+  });
+
+  const filterText = document.getElementById("logFilterText");
+  const filterEvent = document.getElementById("logFilterEvent");
+  const filterActor = document.getElementById("logFilterActor");
+  const filterClear = document.getElementById("logFilterClear");
+
+  filterText?.addEventListener("input", () => {
+    state.gameLogFilter.text = filterText.value;
+    _redrawLogTable();
+  });
+  filterEvent?.addEventListener("change", () => {
+    state.gameLogFilter.event = filterEvent.value;
+    _redrawLogTable();
+  });
+  filterActor?.addEventListener("change", () => {
+    state.gameLogFilter.actor = filterActor.value;
+    _redrawLogTable();
+  });
+  filterClear?.addEventListener("click", () => {
+    state.gameLogFilter = { text: "", event: "", actor: "" };
+    if (filterText) filterText.value = "";
+    if (filterEvent) filterEvent.value = "";
+    if (filterActor) filterActor.value = "";
+    _redrawLogTable();
+  });
+}
+
+// ── Other renderers ──────────────────────────────────────────────────
 function renderGameFiles(files) {
   const list = document.getElementById("gameFilesList");
   if (!files.length) {
@@ -144,14 +338,6 @@ function setBotLogs(lines) {
   document.getElementById("botLogs").textContent = (lines || []).join("\n");
 }
 
-function setGameLog(entries, latestFile = "") {
-  document.getElementById("gameLogView").textContent = JSON.stringify(
-    { latest: latestFile, entries },
-    null,
-    2,
-  );
-}
-
 function setDiscordStatus(payload) {
   document.getElementById("discordStatusView").textContent = JSON.stringify(payload || {}, null, 2);
 }
@@ -161,6 +347,8 @@ async function refreshState() {
   const status = await requestJson("/api/state");
   state.lastStatus = status;
   renderStatusGrid(status);
+  renderHealthRow(status);
+  renderBufferBar(status);
   setBotLogs(status.bot?.logs || []);
   setDiscordStatus(status.discord || {});
 
@@ -218,7 +406,7 @@ async function loadSessions() {
 
 async function loadGameLog() {
   const res = await requestJson("/api/game-log");
-  setGameLog(res.logs || [], res.latest || "");
+  renderGameLogTable(res.logs || []);
 }
 
 async function loadDiscordStatus() {
@@ -405,6 +593,8 @@ function wireEvents() {
     const sessionFile = target.getAttribute("data-session-file");
     if (sessionFile) await loadSessionDetails(sessionFile);
   });
+
+  initLogTableEvents();
 }
 
 // ── Bootstrap ────────────────────────────────────────────────────────
