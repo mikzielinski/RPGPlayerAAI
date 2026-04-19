@@ -512,3 +512,27 @@ body {
 }
 .log-empty { text-align: center; padding: 2rem; color: var(--text-2); }
 .log-count { font-size: 0.78rem; color: var(--text-2); margin-left: 0.5rem; }
+
+/* ── Memory tab ───────────────────────────────────────────────────── */
+.context-window-list {
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: 380px; overflow-y: auto;
+}
+.context-entry {
+  display: flex; gap: 8px; padding: 6px 10px;
+  background: var(--surface-2); border-radius: var(--radius-sm);
+  border: 1px solid var(--border); font-size: 0.82rem;
+}
+.context-entry-speaker {
+  font-weight: 600; color: var(--accent); white-space: nowrap; min-width: 70px;
+}
+.context-entry-text { color: var(--text); line-height: 1.45; word-break: break-word; }
+.context-entry-bot .context-entry-speaker { color: var(--primary-hi); }
+.context-entry-empty { color: var(--text-2); padding: 1rem; font-style: italic; }
+
+.now-view {
+  padding: 12px; background: var(--surface-2);
+  border-radius: var(--radius-sm); border: 1px solid var(--accent);
+  font-size: 0.9rem; line-height: 1.5; min-height: 60px;
+}
+.now-empty { color: var(--text-2); font-style: italic; }

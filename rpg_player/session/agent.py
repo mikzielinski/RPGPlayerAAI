@@ -58,6 +58,7 @@ def _build_system_prompt(
     trigger_mode: str,
     session_context: str = "",
     known_players: Optional[list[str]] = None,
+    general_context: str = "",
 ) -> str:
     base = _SYSTEM_TEMPLATE.format(
         table_archetype=personality.get("table_archetype", "neutralny"),
@@ -79,6 +80,8 @@ def _build_system_prompt(
         base += f"\n\nGracze przy stole (znane imiona): {', '.join(known_players)}"
     if session_context:
         base += "\n\n" + session_context
+    if general_context:
+        base += f"\n\n=== PAMIĘĆ OGÓLNA SESJI ===\n{general_context}\n(koniec pamięci ogólnej)"
     return base
 
 
@@ -173,19 +176,40 @@ def run_agent(
     tts,
     trigger_mode: str,
     buffer_text: str,
+    last_utterance: str = "",
     behavior_instructions: str = "",
     session_context: str = "",
+    general_context: str = "",
     known_players: Optional[list[str]] = None,
     token_tracker=None,
 ) -> str:
-    """Invoke the two-layer agent and return its response text."""
+    """Invoke the two-layer agent and return its response text.
+
+    Three-tier memory is structured as:
+      system prompt  — character/personality + context_general (long-term)
+      human message  — context_window (recent exchanges) + now (last utterance)
+    """
     system_prompt = _build_system_prompt(
         personality, character, trigger_mode,
         session_context=session_context,
         known_players=known_players,
+        general_context=general_context,
     )
     if behavior_instructions:
         system_prompt += "\n" + behavior_instructions
+
+    # Build structured human message separating window and now
+    if last_utterance and buffer_text.rstrip().endswith(last_utterance.rstrip()):
+        window_only = buffer_text[: buffer_text.rstrip().rfind(last_utterance.rstrip())].rstrip()
+    else:
+        window_only = buffer_text
+
+    parts = []
+    if window_only:
+        parts.append(f"=== OKNO KONTEKSTU ===\n{window_only}")
+    if last_utterance:
+        parts.append(f"=== TERAZ ===\n{last_utterance}")
+    human_content = "\n\n".join(parts) if parts else buffer_text
 
     tools = _make_tools(character, vectorstore, tts)
     tool_map = {t.name: t for t in tools}
@@ -201,7 +225,7 @@ def run_agent(
 
     messages: list = [
         SystemMessage(content=system_prompt),
-        HumanMessage(content=buffer_text),
+        HumanMessage(content=human_content),
     ]
 
     for _ in range(_MAX_TOOL_ROUNDS):

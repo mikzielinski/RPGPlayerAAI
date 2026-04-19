@@ -20,6 +20,7 @@
         <button class="tab-btn" data-tab="config">Konfiguracja</button>
         <button class="tab-btn" data-tab="charakter">Postać</button>
         <button class="tab-btn" data-tab="zasoby">Zasoby</button>
+        <button class="tab-btn" data-tab="pamiec">Pamięć</button>
         <button class="tab-btn" data-tab="discord">Discord</button>
       </nav>
       <button id="refreshStateBtn" class="btn btn-ghost btn-sm">↻ Odśwież</button>
@@ -197,6 +198,19 @@
             </div>
           </div>
 
+          <div class="form-row">
+            <label for="bufferFlushThreshold">Próg auto-flush buforu (BUFFER_FLUSH_THRESHOLD)</label>
+            <div class="slider-row">
+              <input id="bufferFlushThreshold" type="range" min="50" max="100" step="5" value="95" class="slider" />
+              <span id="bufferFlushThresholdVal" class="slider-val">95%</span>
+            </div>
+            <p class="help-text">
+              Gdy bufor osiągnie ten % pojemności, zostaje automatycznie przepłukany —
+              ale najpierw LLM zapisuje jego treść do <strong>pamięci ogólnej</strong> (context_general.json).
+              Dzięki temu bot nigdy nie traci wydarzeń z gry.
+            </p>
+          </div>
+
           <div class="actions mt-2">
             <button id="saveEnvBtn" class="btn btn-primary">Zapisz konfigurację</button>
           </div>
@@ -291,6 +305,51 @@
               </tbody>
             </table>
           </div>
+        </section>
+
+      </div>
+    </main>
+
+    <!-- TAB: Pamięć -->
+    <main class="tab-content" id="tab-pamiec">
+      <div class="page-grid">
+
+        <section class="card span-2">
+          <div class="card-header">
+            <h2>Pamięć ogólna sesji (context_general.json)</h2>
+            <div class="header-actions">
+              <span id="memoryStatusBadge" class="badge badge-off">Nieaktywna</span>
+              <button id="loadMemoryBtn" class="btn btn-sm">Wczytaj</button>
+              <button id="saveMemoryBtn" class="btn btn-primary btn-sm">Zapisz</button>
+            </div>
+          </div>
+          <p class="help-text mb-2">
+            Trójpoziomowa pamięć bota: <strong>Teraz</strong> (ostatnia wypowiedź) →
+            <strong>Okno kontekstu</strong> (ostatnie N wymian w buforze) →
+            <strong>Pamięć ogólna</strong> (ten plik — skompresowane podsumowanie całej sesji, nigdy nie ginie).
+            Gdy bufor osiągnie próg auto-flush, LLM automatycznie aktualizuje ten plik przed wyczyszczeniem buforu.
+          </p>
+          <textarea id="memoryJson" class="json-editor" style="min-height:420px"></textarea>
+          <div class="actions mt-2">
+            <button id="resetMemoryBtn" class="btn btn-danger btn-sm">Wyczyść pamięć ogólną</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header"><h2>Okno kontekstu (teraz w buforze)</h2></div>
+          <p class="help-text mb-2">
+            Bieżące wypowiedzi które bot widzi przy każdej decyzji.
+            Pasek postępu w zakładce <strong>Panel</strong> pokazuje wypełnienie.
+          </p>
+          <div id="contextWindowView" class="context-window-list"></div>
+        </section>
+
+        <section class="card">
+          <div class="card-header"><h2>Teraz (ostatnia wypowiedź)</h2></div>
+          <p class="help-text mb-2">
+            Trigger decyzji bota — ostatnia zarejestrowana wypowiedź przy stole.
+          </p>
+          <div id="nowView" class="now-view"></div>
         </section>
 
       </div>

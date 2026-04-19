@@ -22,12 +22,18 @@ function initTabs() {
 
 // ── Slider sync ─────────────────────────────────────────────────────
 function initSliders() {
-  const slider = document.getElementById("bufferMaxExchanges");
-  const val = document.getElementById("bufferMaxExchangesVal");
-  if (!slider || !val) return;
-  slider.addEventListener("input", () => {
-    val.textContent = slider.value;
-    state.envFormDirty = true;
+  const pairs = [
+    ["bufferMaxExchanges", "bufferMaxExchangesVal", (v) => v],
+    ["bufferFlushThreshold", "bufferFlushThresholdVal", (v) => `${v}%`],
+  ];
+  pairs.forEach(([sliderId, valId, fmt]) => {
+    const slider = document.getElementById(sliderId);
+    const val = document.getElementById(valId);
+    if (!slider || !val) return;
+    slider.addEventListener("input", () => {
+      val.textContent = fmt(slider.value);
+      state.envFormDirty = true;
+    });
   });
 }
 
@@ -352,6 +358,10 @@ async function refreshState() {
   setBotLogs(status.bot?.logs || []);
   setDiscordStatus(status.discord || {});
 
+  const buf = status.bot?.buffer || [];
+  renderContextWindow(buf);
+  renderNowView(buf);
+
   if (!state.envFormDirty) {
     const env = status.env || {};
     _setVal("swearingIntensity", env.swearing_intensity || "off");
@@ -362,6 +372,10 @@ async function refreshState() {
     _setVal("bufferMaxExchanges", String(env.buffer_max_exchanges || 15));
     const valEl = document.getElementById("bufferMaxExchangesVal");
     if (valEl) valEl.textContent = String(env.buffer_max_exchanges || 15);
+    const threshPct = Math.round((env.buffer_flush_threshold ?? 0.95) * 100);
+    _setVal("bufferFlushThreshold", String(threshPct));
+    const threshValEl = document.getElementById("bufferFlushThresholdVal");
+    if (threshValEl) threshValEl.textContent = `${threshPct}%`;
     _setVal("ttsBackend", env.tts_backend || "edge");
     _setVal("ttsVoice", env.tts_voice || "");
     _setVal("openaiTtsModel", env.openai_tts_model || "");
@@ -381,6 +395,57 @@ function _setVal(id, val) {
 function _setChecked(id, checked) {
   const el = document.getElementById(id);
   if (el) el.checked = checked;
+}
+
+// ── Memory tab ───────────────────────────────────────────────────────
+async function loadMemory() {
+  const res = await requestJson("/api/memory");
+  document.getElementById("memoryJson").value = JSON.stringify(res.data || {}, null, 2);
+  const badge = document.getElementById("memoryStatusBadge");
+  if (badge) {
+    const d = res.data || {};
+    const hasContent = Object.values(d).some((v) => (Array.isArray(v) ? v.length : v && typeof v === "object" ? Object.keys(v).length : false));
+    badge.textContent = hasContent ? "Aktywna" : "Pusta";
+    badge.className = `badge ${hasContent ? "badge-on" : "badge-off"}`;
+  }
+}
+
+async function saveMemory() {
+  const raw = document.getElementById("memoryJson").value.trim();
+  let data = {};
+  try { if (raw) data = JSON.parse(raw); } catch (e) { showToast(`Błąd JSON: ${e.message}`, true); return; }
+  const res = await requestJson("/api/memory", { method: "POST", body: JSON.stringify({ data }) });
+  showToast(res.message || "Pamięć zapisana");
+}
+
+function renderContextWindow(buffer) {
+  const el = document.getElementById("contextWindowView");
+  if (!el) return;
+  if (!buffer || !buffer.length) {
+    el.innerHTML = `<div class="context-entry-empty">Bufor pusty</div>`;
+    return;
+  }
+  el.innerHTML = buffer
+    .map((e) => {
+      const isBot = e.speaker && e.speaker !== "gracz";
+      return `<div class="context-entry ${isBot ? "context-entry-bot" : ""}">
+        <span class="context-entry-speaker">${e.speaker || "?"}</span>
+        <span class="context-entry-text">${(e.text || "").replace(/</g, "&lt;")}</span>
+      </div>`;
+    })
+    .join("");
+  el.scrollTop = el.scrollHeight;
+}
+
+function renderNowView(buffer) {
+  const el = document.getElementById("nowView");
+  if (!el) return;
+  const last = buffer && buffer.length ? buffer[buffer.length - 1] : null;
+  if (!last) {
+    el.innerHTML = `<span class="now-empty">Brak wypowiedzi</span>`;
+    return;
+  }
+  el.innerHTML = `<strong>${last.speaker || "?"}</strong>: ${(last.text || "").replace(/</g, "&lt;")}`;
 }
 
 // ── Data loaders ─────────────────────────────────────────────────────
@@ -424,6 +489,8 @@ async function saveJsonFromEditor(editorId, endpoint) {
 }
 
 function _collectEnvPayload() {
+  const threshSlider = document.getElementById("bufferFlushThreshold");
+  const threshVal = threshSlider ? (parseInt(threshSlider.value, 10) / 100) : 0.95;
   return {
     whisper_insecure_ssl: document.getElementById("whisperInsecureSsl").checked,
     swearing_intensity: document.getElementById("swearingIntensity").value,
@@ -431,6 +498,7 @@ function _collectEnvPayload() {
     allow_proactive_speak_up: document.getElementById("allowSpeakUp").checked,
     enable_additional_ai_players: document.getElementById("enableExtraPlayers").checked,
     buffer_max_exchanges: document.getElementById("bufferMaxExchanges").value,
+    buffer_flush_threshold: threshVal,
     tts_backend: document.getElementById("ttsBackend").value,
     tts_voice: (document.getElementById("ttsVoice").value || "").trim(),
     openai_tts_model: (document.getElementById("openaiTtsModel").value || "").trim(),
@@ -553,6 +621,17 @@ function wireEvents() {
   document.getElementById("reloadSessionsBtn").addEventListener("click", loadSessions);
   document.getElementById("uploadForm").addEventListener("submit", uploadFiles);
 
+  document.getElementById("loadMemoryBtn")?.addEventListener("click", loadMemory);
+  document.getElementById("saveMemoryBtn")?.addEventListener("click", saveMemory);
+  document.getElementById("resetMemoryBtn")?.addEventListener("click", async () => {
+    const empty = { known_npcs: {}, known_locations: [], key_decisions: [], session_notes: [], known_players: {}, last_updated: "" };
+    const res = await requestJson("/api/memory", { method: "POST", body: JSON.stringify({ data: empty }) });
+    showToast(res.message || "Pamięć wyczyszczona");
+    document.getElementById("memoryJson").value = JSON.stringify(empty, null, 2);
+    const badge = document.getElementById("memoryStatusBadge");
+    if (badge) { badge.textContent = "Pusta"; badge.className = "badge badge-off"; }
+  });
+
   document.getElementById("loadCharacterBtn").addEventListener("click", loadCharacter);
   document.getElementById("saveCharacterBtn").addEventListener("click", async () => {
     try { await saveJsonFromEditor("characterJson", "/api/character"); await refreshState(); }
@@ -604,12 +683,13 @@ async function bootstrap() {
   wireEvents();
   await Promise.all([
     refreshState(), loadCharacter(), loadPersonality(),
-    loadGameFiles(), loadSessions(), loadGameLog(), loadDiscordStatus(),
+    loadGameFiles(), loadSessions(), loadGameLog(), loadDiscordStatus(), loadMemory(),
   ]);
   setInterval(async () => {
     await refreshState();
     await loadGameLog();
     await loadDiscordStatus();
+    await loadMemory();
   }, 4000);
 }
 

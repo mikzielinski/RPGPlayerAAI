@@ -29,6 +29,7 @@ PERSONALITY_PATH = Path(config.PERSONALITY_FILE)
 GAME_FILES_PATH = Path(config.GAME_FILES_DIR)
 CHROMA_PATH = Path(config.CHROMA_DIR)
 SESSIONS_PATH = Path(config.SESSIONS_DIR)
+GENERAL_CONTEXT_PATH = Path(config.GENERAL_CONTEXT_FILE)
 
 SUPPORTED_GAME_EXTENSIONS = {".pdf", ".docx", ".xlsx"}
 
@@ -219,16 +220,16 @@ def _list_game_files() -> list[dict[str, Any]]:
     return files
 
 
-def _get_buffer_current(game_logs: list[Path]) -> int:
-    """Return the most recently observed buffer size from the game log."""
+def _get_buffer_snapshot(game_logs: list[Path]) -> tuple[int, list]:
+    """Return (current_size, buffer_entries) from the latest game log entry with buffer_tail."""
     if not game_logs:
-        return 0
+        return 0, []
     tail = GameLog.tail(game_logs[0], limit=30)
     for entry in reversed(tail):
         bt = entry.get("payload", {}).get("buffer_tail")
         if isinstance(bt, list):
-            return len(bt)
-    return 0
+            return len(bt), bt
+    return 0, []
 
 
 def _discord_status() -> dict[str, Any]:
@@ -256,10 +257,10 @@ def _system_status(process_manager: BotProcessManager) -> dict[str, Any]:
     tts_backend = (env_file.get("TTS_BACKEND") or config.TTS_BACKEND).strip().lower()
     game_logs = GameLog.list_logs()
     latest_game_log = str(game_logs[0]) if game_logs else ""
-    buffer_current = _get_buffer_current(game_logs)
+    buffer_current, buffer_entries = _get_buffer_snapshot(game_logs)
 
     return {
-        "bot": process_manager.snapshot(),
+        "bot": {**process_manager.snapshot(), "buffer": buffer_entries},
         "paths": {
             "character": str(CHARACTER_PATH),
             "personality": str(PERSONALITY_PATH),
@@ -292,6 +293,7 @@ def _system_status(process_manager: BotProcessManager) -> dict[str, Any]:
             "openai_tts_model": env_file.get("OPENAI_TTS_MODEL", config.OPENAI_TTS_MODEL),
             "openai_tts_voice": env_file.get("OPENAI_TTS_VOICE", config.OPENAI_TTS_VOICE),
             "openai_tts_format": env_file.get("OPENAI_TTS_FORMAT", config.OPENAI_TTS_FORMAT),
+            "buffer_flush_threshold": float(env_file.get("BUFFER_FLUSH_THRESHOLD", str(config.BUFFER_FLUSH_THRESHOLD))),
             "discord_enabled": _env_bool(env_file.get("DISCORD_ENABLED"), config.DISCORD_ENABLED),
             "discord_guild_id": env_file.get("DISCORD_GUILD_ID", config.DISCORD_GUILD_ID),
             "discord_text_channel_id": env_file.get("DISCORD_TEXT_CHANNEL_ID", config.DISCORD_TEXT_CHANNEL_ID),
@@ -428,6 +430,7 @@ def create_app() -> Flask:
         allow_speak_up = payload.get("allow_proactive_speak_up")
         enable_extra_players = payload.get("enable_additional_ai_players")
         buffer_size = payload.get("buffer_max_exchanges")
+        buffer_flush_threshold = payload.get("buffer_flush_threshold")
         tts_backend = payload.get("tts_backend")
         tts_voice = payload.get("tts_voice")
         openai_tts_model = payload.get("openai_tts_model")
@@ -482,6 +485,15 @@ def create_app() -> Flask:
                     }
                 ), 400
             updates["BUFFER_MAX_EXCHANGES"] = str(parsed)
+
+        if buffer_flush_threshold is not None:
+            try:
+                fval = float(buffer_flush_threshold)
+                if not (0.5 <= fval <= 1.0):
+                    return jsonify({"ok": False, "message": "BUFFER_FLUSH_THRESHOLD musi być w zakresie 0.5–1.0."}), 400
+                updates["BUFFER_FLUSH_THRESHOLD"] = str(round(fval, 2))
+            except Exception:
+                return jsonify({"ok": False, "message": "Nieprawidłowa wartość BUFFER_FLUSH_THRESHOLD."}), 400
 
         if tts_backend is not None:
             tts_backend = str(tts_backend).strip().lower()
@@ -602,6 +614,20 @@ def create_app() -> Flask:
     def api_bot_stop():
         ok, message = manager.stop()
         return jsonify({"ok": ok, "message": message}), (200 if ok else 409)
+
+    @app.get("/api/memory")
+    def api_get_memory():
+        data, error = _safe_read_json(GENERAL_CONTEXT_PATH)
+        return jsonify({"exists": GENERAL_CONTEXT_PATH.exists(), "data": data or {}, "error": error})
+
+    @app.post("/api/memory")
+    def api_save_memory():
+        payload = request.get_json(silent=True) or {}
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            return jsonify({"ok": False, "message": "Pole 'data' musi być obiektem JSON."}), 400
+        _safe_write_json(GENERAL_CONTEXT_PATH, data)
+        return jsonify({"ok": True, "message": "Pamięć ogólna zapisana."})
 
     @app.post("/api/buffer/flush")
     def api_buffer_flush():

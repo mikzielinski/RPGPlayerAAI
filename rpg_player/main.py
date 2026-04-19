@@ -20,6 +20,7 @@ from rpg_player.session.session_memory import SessionMemory
 from rpg_player.session.speaker_registry import SpeakerRegistry
 from rpg_player.session.token_tracker import TokenTracker
 from rpg_player.session.game_log import GameLog
+from rpg_player.session.memory_manager import MemoryManager
 from rpg_player.tts.speaker import Speaker
 from rpg_player.session.listener import Listener
 from rpg_player.session.classifier import Classifier
@@ -206,6 +207,7 @@ def _process_bot_turn(
     game_log: GameLog | None = None,
     discord_connector: DiscordConnector | None = None,
     session_context: str = "",
+    general_context: str = "",
     force_turn: bool = False,
 ) -> None:
     """Classify and optionally respond for one BotPlayer. Mutates player state."""
@@ -303,8 +305,10 @@ def _process_bot_turn(
             tts=tts,
             trigger_mode=decision,
             buffer_text=buffer_text,
+            last_utterance=last_utterance,
             behavior_instructions=behavior_instructions,
             session_context=session_context,
+            general_context=general_context,
             known_players=registry.known_players,
             token_tracker=player.token_tracker,
         )
@@ -375,11 +379,13 @@ def main() -> None:
     dash = Dashboard()
     tts = Speaker()
     game_log = GameLog(enabled=config.GAME_LOG_ENABLED)
+    memory_manager = MemoryManager()
     discord_connector = DiscordConnector(enabled=config.DISCORD_ENABLED)
     input_handler = InputHandler()
     registry = SpeakerRegistry()
     if known_players_prev:
         registry.from_dict({"names": known_players_prev, "log": []})
+        memory_manager.update_players(known_players_prev)
     discord_connector.attach_registry(registry)
 
     # 1. Ingest game files
@@ -546,6 +552,33 @@ def main() -> None:
             if not buf:
                 continue
 
+            # Auto-flush when buffer fill reaches threshold — summarise first
+            max_ex = config.BUFFER_MAX_EXCHANGES
+            fill = len(buf) / max_ex if max_ex else 0.0
+            if fill >= config.BUFFER_FLUSH_THRESHOLD:
+                memory_manager.summarize_async(list(buf), registry.known_players)
+                listener.flush_keeping_last()
+                pct = f"{fill:.0%}"
+                dash.log(
+                    f"[yellow]Auto-flush buforu ({len(buf)}/{max_ex} = {pct}) "
+                    f"— kontekst zapisany do pamięci ogólnej.[/yellow]"
+                )
+                if game_log:
+                    game_log.log_event(
+                        event="buffer_auto_flushed",
+                        status="LISTENING",
+                        actor=char_name,
+                        detail=f"Auto-flush po osiągnięciu progu {pct}.",
+                        known_players=registry.known_players,
+                    )
+                for p in all_players:
+                    p._last_wait_hash = ""
+                buf = listener.get_buffer()
+
+            # Update known players in general memory
+            memory_manager.update_players(registry.known_players)
+            general_context = memory_manager.get_summary_text()
+
             # Force key only applies to primary player
             force = input_handler.consume_force()
 
@@ -560,6 +593,7 @@ def main() -> None:
                     game_log=game_log,
                     discord_connector=discord_connector,
                     session_context=session_context,
+                    general_context=general_context,
                     force_turn=(force and i == 0),
                 )
                 # Brief gap between multiple AI players speaking
