@@ -353,17 +353,34 @@ function setBotLogs(lines) {
 
 function setDiscordStatus(payload) {
   const d = payload || {};
+  const tokenOk = d.token_configured ?? false;
   const lines = [
-    `connected:     ${d.connected ?? false}`,
-    `guild:         ${d.guild || "—"}`,
-    `text_channel:  ${d.text_channel || "—"}`,
-    `voice_channel: ${d.voice_channel || "—"}`,
-    `voice_rx:      ${d.voice_rx ?? false}   ← słucha graczy przez Discord`,
-    `voice_tx:      ${d.voice_tx ?? false}   ← mówi na kanale głosowym`,
-    `known_users:   ${(d.known_users || []).join(", ") || "—"}`,
-    `last_error:    ${d.last_error || "—"}`,
+    `── Konfiguracja (.env) ──────────────────`,
+    `enabled:          ${d.enabled ?? false}`,
+    `token:            ${tokenOk ? "✓ skonfigurowany" : "✗ BRAK — wklej token i zapisz"}`,
+    `text_only:        ${d.text_only ?? true}`,
+    `guild_id:         ${d.guild_id || "—"}`,
+    `text_channel_id:  ${d.text_channel_id || "—"}`,
+    `voice_channel_id: ${d.voice_channel_id || "—"}`,
+    ``,
+    `── Połączenie (aktywne gdy bot działa) ──`,
+    `connected:    ${d.connected ?? false}`,
+    `guild:        ${d.guild || "—"}`,
+    `text_channel: ${d.text_channel || "—"}`,
+    `voice_rx:     ${d.voice_rx ?? false}`,
+    `voice_tx:     ${d.voice_tx ?? false}`,
+    `known_users:  ${(d.known_users || []).join(", ") || "—"}`,
+    `last_error:   ${d.last_error || "—"}`,
   ];
   document.getElementById("discordStatusView").textContent = lines.join("\n");
+
+  // Update token field placeholder to reflect saved state
+  const tokenEl = document.getElementById("discordBotToken");
+  if (tokenEl && !tokenEl.value) {
+    tokenEl.placeholder = tokenOk
+      ? "●●●●●●●● (token zapisany — wklej nowy aby zmienić)"
+      : "Bot token z Discord Developer Portal";
+  }
 }
 
 // ── State refresh ────────────────────────────────────────────────────
@@ -571,7 +588,9 @@ async function saveDiscord() {
   const res = await requestJson("/api/env", { method: "POST", body: JSON.stringify(payload) });
   state.envFormDirty = false;
   showToast(res.message || "Zapisano Discord");
-  document.getElementById("discordBotToken").value = "";
+  const tokenEl = document.getElementById("discordBotToken");
+  tokenEl.value = "";
+  if (token) tokenEl.placeholder = "●●●●●●●● (token zapisany — wklej nowy aby zmienić)";
   await loadDiscordStatus();
 }
 

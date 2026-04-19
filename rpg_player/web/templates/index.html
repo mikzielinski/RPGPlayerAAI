@@ -477,8 +477,10 @@
             <button id="reloadDiscordBtn" class="btn btn-sm">Odśwież</button>
           </div>
           <p class="help-text mb-2">
-            Po zapisaniu konfiguracji i uruchomieniu bota status powinien przejść na
-            <strong>connected: true</strong>. Bot napisze powitanie na kanale tekstowym i będzie odpowiadał na wiadomości.
+            Górna sekcja pokazuje konfigurację z pliku <code>.env</code> (aktualizuje się od razu po zapisie).
+            Dolna sekcja <em>Połączenie</em> jest aktywna tylko gdy <strong>bot jest uruchomiony</strong>
+            (zakładka Panel → Start lub <code>./run.sh</code>).
+            Token jest przechowywany bezpiecznie w <code>.env</code> — pole jest puste z powodów bezpieczeństwa.
           </p>
           <pre id="discordStatusView" class="console console-tall"></pre>
         </section>

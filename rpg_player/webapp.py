@@ -239,14 +239,29 @@ def _get_buffer_snapshot(game_logs: list[Path]) -> tuple[int, list]:
 
 
 def _discord_status() -> dict[str, Any]:
-    connector = DiscordConnector(
-        enabled=config.DISCORD_ENABLED,
-        token=config.DISCORD_BOT_TOKEN,
-        guild_id=config.DISCORD_GUILD_ID,
-        text_channel_id=config.DISCORD_TEXT_CHANNEL_ID,
-        voice_channel_id=config.DISCORD_VOICE_CHANNEL_ID,
-    )
-    return connector.get_state_snapshot()
+    """Return Discord config status from .env file (not stale module-level config)."""
+    env_file = _load_env_file()
+    token = env_file.get("DISCORD_BOT_TOKEN", "").strip()
+    enabled = env_file.get("DISCORD_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+    text_only = env_file.get("DISCORD_TEXT_ONLY", "1").strip().lower() in {"1", "true", "yes", "on"}
+    return {
+        "enabled": enabled,
+        "token_configured": bool(token),
+        "text_only": text_only,
+        "guild_id": env_file.get("DISCORD_GUILD_ID", "").strip(),
+        "text_channel_id": env_file.get("DISCORD_TEXT_CHANNEL_ID", "").strip(),
+        "voice_channel_id": env_file.get("DISCORD_VOICE_CHANNEL_ID", "").strip(),
+        # live connection fields — only populated when bot process is running
+        "connected": False,
+        "guild": "",
+        "text_channel": "",
+        "voice_channel": "",
+        "known_users": [],
+        "messages": [],
+        "voice_rx": False,
+        "voice_tx": False,
+        "last_error": "" if token else "DISCORD_BOT_TOKEN nie ustawiony",
+    }
 
 
 def _system_status(process_manager: BotProcessManager) -> dict[str, Any]:
