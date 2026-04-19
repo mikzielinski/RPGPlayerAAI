@@ -1,11 +1,14 @@
 """Entry point — startup sequence and main session loop."""
 from __future__ import annotations
 
+import atexit
 import hashlib
 import json
 import sys
+import termios
 import threading
 import time
+import tty
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -46,17 +49,49 @@ class BotPlayer:
 
 
 class InputHandler:
-    """Background stdin reader for f / v / q hotkeys."""
+    """Background keyboard reader — raw single-keypress on real TTY, line-mode fallback."""
 
     def __init__(self) -> None:
         self._force_turn = False
         self._voice_next = False
         self._quit = False
+        self._fd: int | None = None
+        self._old_settings = None
         t = threading.Thread(target=self._loop, daemon=True)
         t.start()
 
+    # ── Input loop ────────────────────────────────────────────────────
+
     def _loop(self) -> None:
-        while True:
+        try:
+            fd = sys.stdin.fileno()
+            old = termios.tcgetattr(fd)
+        except Exception:
+            # stdin is piped/redirected — fall back to line-buffered mode
+            self._line_loop()
+            return
+
+        self._fd = fd
+        self._old_settings = old
+        atexit.register(self._restore)
+        try:
+            tty.setcbreak(fd)
+            while not self._quit:
+                ch = sys.stdin.read(1).lower()
+                if ch == "f":
+                    self._force_turn = True
+                elif ch == "v":
+                    self._voice_next = True
+                elif ch in ("q", "\x1b"):   # q or Esc
+                    self._quit = True
+        except Exception:
+            pass
+        finally:
+            self._restore()
+
+    def _line_loop(self) -> None:
+        """Fallback for non-TTY environments (piped input)."""
+        while not self._quit:
             try:
                 line = sys.stdin.readline().strip().lower()
             except Exception:
@@ -67,6 +102,22 @@ class InputHandler:
                 self._voice_next = True
             elif line in ("q", "quit", "exit"):
                 self._quit = True
+
+    # ── Lifecycle ─────────────────────────────────────────────────────
+
+    def stop(self) -> None:
+        self._quit = True
+        self._restore()
+
+    def _restore(self) -> None:
+        if self._old_settings is not None and self._fd is not None:
+            try:
+                termios.tcsetattr(self._fd, termios.TCSADRAIN, self._old_settings)
+            except Exception:
+                pass
+            self._old_settings = None
+
+    # ── Accessors ─────────────────────────────────────────────────────
 
     def consume_force(self) -> bool:
         if self._force_turn:
@@ -609,6 +660,7 @@ def main() -> None:
     except KeyboardInterrupt:
         dash.log("Sesja przerwana przez uzytkownika.")
     finally:
+        input_handler.stop()
         dash.update(status="STOPPED")
         listener.stop()
         if config.DISCORD_ENABLED:
