@@ -148,6 +148,7 @@ CHARACTER_FILE = os.path.join(_DATA_DIR, "character.json")
 PERSONALITY_FILE = os.path.join(_DATA_DIR, "player_personality.json")
 GAME_FILES_DIR = os.path.join(_DATA_DIR, "game_files")
 CHROMA_DIR = os.path.join(_DATA_DIR, "chroma_db")
+SECRETS_DIR = os.path.join(_DATA_DIR, "secrets")
 
 # Cooldown overrides keyed by talk_frequency value from personality JSON
 COOLDOWN_BY_FREQUENCY = {

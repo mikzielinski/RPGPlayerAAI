@@ -21,6 +21,7 @@ from rpg_player import config
 from rpg_player.integrations.discord_connector import DiscordConnector
 from rpg_player.session.game_log import GameLog
 from rpg_player.session.session_memory import SessionMemory
+from rpg_player.session import secrets_manager
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -36,6 +37,7 @@ GENERAL_CONTEXT_PATH = Path(config.GENERAL_CONTEXT_FILE)
 GAME_TYPE_PATH = Path(config.GAME_TYPE_FILE)
 
 SUPPORTED_GAME_EXTENSIONS = {".pdf", ".docx", ".xlsx"}
+SECRETS_PATH = Path(config.SECRETS_DIR)
 
 
 def _env_bool(value: str | None, default: bool = False) -> bool:
@@ -634,6 +636,61 @@ def create_app() -> Flask:
             return jsonify({"ok": False, "message": "Pole 'data' musi być obiektem JSON."}), 400
         _safe_write_json(GENERAL_CONTEXT_PATH, data)
         return jsonify({"ok": True, "message": "Pamięć ogólna zapisana."})
+
+    @app.get("/api/secrets")
+    def api_list_secrets():
+        return jsonify({"secrets": secrets_manager.list_secrets()})
+
+    @app.post("/api/secrets")
+    def api_add_secret():
+        payload = request.get_json(silent=True) or {}
+        title = str(payload.get("title", "")).strip()
+        text = str(payload.get("text", "")).strip()
+        source = str(payload.get("source", "gm")).strip().lower() or "gm"
+        if not text:
+            return jsonify({"ok": False, "message": "Pole 'text' jest wymagane."}), 400
+        entry = secrets_manager.add_text(title, text, source)
+        return jsonify({"ok": True, "secret": entry})
+
+    @app.post("/api/secrets/upload")
+    def api_upload_secret():
+        file = request.files.get("file")
+        if not file:
+            return jsonify({"ok": False, "message": "Nie przesłano pliku."}), 400
+        title = request.form.get("title", "").strip()
+        source = (request.form.get("source", "gm") or "gm").strip().lower()
+
+        filename = Path(file.filename or "").name
+        if not filename:
+            return jsonify({"ok": False, "message": "Brak nazwy pliku."}), 400
+
+        ext = Path(filename).suffix.lower()
+        if ext not in secrets_manager.SUPPORTED_EXTS:
+            return jsonify({
+                "ok": False,
+                "message": f"Nieobsługiwany typ pliku: {ext}. Obsługiwane: txt, pdf, png, jpg, jpeg, gif, webp",
+            }), 400
+
+        SECRETS_PATH.mkdir(parents=True, exist_ok=True)
+        files_dir = SECRETS_PATH / "files"
+        files_dir.mkdir(parents=True, exist_ok=True)
+        dest = files_dir / filename
+        file.save(dest)
+
+        try:
+            content = secrets_manager.extract_file_content(dest, config.OPENAI_API_KEY)
+        except Exception as exc:
+            content = f"[Błąd ekstrakcji: {exc}]"
+
+        entry = secrets_manager.add_file(filename, content, title=title, source=source)
+        return jsonify({"ok": True, "secret": entry})
+
+    @app.delete("/api/secrets/<path:secret_id>")
+    def api_delete_secret(secret_id: str):
+        deleted = secrets_manager.delete(secret_id)
+        if not deleted:
+            return jsonify({"ok": False, "message": "Sekret nie istnieje."}), 404
+        return jsonify({"ok": True, "message": "Sekret usunięty."})
 
     @app.post("/api/buffer/flush")
     def api_buffer_flush():

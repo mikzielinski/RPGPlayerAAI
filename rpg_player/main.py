@@ -26,6 +26,7 @@ from rpg_player.session.token_tracker import TokenTracker
 from rpg_player.session.game_log import GameLog
 from rpg_player.session.memory_manager import MemoryManager
 from rpg_player.session import game_detector
+from rpg_player.session import secrets_manager
 from rpg_player.tts.speaker import Speaker
 from rpg_player.session.listener import Listener
 from rpg_player.session.classifier import Classifier
@@ -262,6 +263,7 @@ def _process_bot_turn(
     session_context: str = "",
     general_context: str = "",
     game_context: str = "",
+    secrets_context: str = "",
     force_turn: bool = False,
 ) -> None:
     """Classify and optionally respond for one BotPlayer. Mutates player state."""
@@ -364,6 +366,7 @@ def _process_bot_turn(
             session_context=session_context,
             general_context=general_context,
             game_context=game_context,
+            secrets_context=secrets_context,
             known_players=registry.known_players,
             token_tracker=player.token_tracker,
         )
@@ -667,6 +670,7 @@ def main() -> None:
             # Update known players in general memory
             memory_manager.update_players(registry.known_players)
             general_context = memory_manager.get_summary_text()
+            secrets_context = secrets_manager.build_context()
 
             # Force key only applies to primary player
             force = input_handler.consume_force()
@@ -684,6 +688,7 @@ def main() -> None:
                     session_context=session_context,
                     general_context=general_context,
                     game_context=game_context,
+                    secrets_context=secrets_context,
                     force_turn=(force and i == 0),
                 )
                 # Brief gap between multiple AI players speaking

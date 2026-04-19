@@ -597,6 +597,85 @@ async function loadSessionDetails(file) {
 }
 
 // ── Wire events ───────────────────────────────────────────────────────
+// ── Secrets ──────────────────────────────────────────────────────────
+async function loadSecrets() {
+  const el = document.getElementById("secretsList");
+  if (!el) return;
+  try {
+    const data = await requestJson("/api/secrets");
+    const secrets = data.secrets || [];
+    if (!secrets.length) {
+      el.innerHTML = '<p class="help-text">Brak aktywnych sekretów.</p>';
+      return;
+    }
+    el.innerHTML = secrets.map((s) => {
+      const date = s.added_at ? new Date(s.added_at).toLocaleString("pl-PL") : "";
+      const srcBadge = `<span class="badge badge-${s.source === "gm" ? "on" : "off"}" style="font-size:0.7em">${(s.source || "gm").toUpperCase()}</span>`;
+      const preview = (s.content || "").slice(0, 200).replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const more = s.content && s.content.length > 200 ? "…" : "";
+      return `<div class="secret-item" data-secret-id="${s.id}">
+        <div class="secret-header">
+          ${srcBadge}
+          <strong>${(s.title || "Sekret").replace(/</g, "&lt;")}</strong>
+          <span class="secret-date">${date}</span>
+          <button class="btn btn-danger btn-sm" data-delete-secret="${s.id}">Usuń</button>
+        </div>
+        <pre class="secret-preview">${preview}${more}</pre>
+      </div>`;
+    }).join("");
+  } catch (err) {
+    if (el) el.innerHTML = `<p class="help-text error">Błąd: ${err.message}</p>`;
+  }
+}
+
+async function addTextSecret() {
+  const title = (document.getElementById("secretTitle")?.value || "").trim();
+  const text = (document.getElementById("secretText")?.value || "").trim();
+  const source = document.getElementById("secretSource")?.value || "gm";
+  if (!text) { showToast("Wpisz treść sekretu.", true); return; }
+  try {
+    const res = await requestJson("/api/secrets", {
+      method: "POST",
+      body: JSON.stringify({ title, text, source }),
+    });
+    showToast(res.message || "Sekret dodany.");
+    document.getElementById("secretTitle").value = "";
+    document.getElementById("secretText").value = "";
+    await loadSecrets();
+  } catch (err) {
+    showToast(`Błąd: ${err.message}`, true);
+  }
+}
+
+async function uploadSecretFile() {
+  const fileInput = document.getElementById("secretFile");
+  const file = fileInput?.files?.[0];
+  if (!file) { showToast("Wybierz plik.", true); return; }
+  const title = (document.getElementById("secretFileTitle")?.value || "").trim();
+  const source = document.getElementById("secretFileSource")?.value || "gm";
+
+  const progress = document.getElementById("secretUploadProgress");
+  if (progress) progress.style.display = "block";
+
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("title", title);
+    form.append("source", source);
+    const resp = await fetch("/api/secrets/upload", { method: "POST", body: form });
+    const res = await resp.json();
+    if (!resp.ok) throw new Error(res.message || `HTTP ${resp.status}`);
+    showToast(res.message || "Plik wgrany i przetworzony.");
+    fileInput.value = "";
+    if (document.getElementById("secretFileTitle")) document.getElementById("secretFileTitle").value = "";
+    await loadSecrets();
+  } catch (err) {
+    showToast(`Błąd: ${err.message}`, true);
+  } finally {
+    if (progress) progress.style.display = "none";
+  }
+}
+
 function wireEvents() {
   const markDirty = () => { state.envFormDirty = true; };
   [
@@ -622,6 +701,10 @@ function wireEvents() {
   document.getElementById("reloadDiscordBtn")?.addEventListener("click", loadDiscordStatus);
   document.getElementById("reloadSessionsBtn").addEventListener("click", loadSessions);
   document.getElementById("uploadForm").addEventListener("submit", uploadFiles);
+
+  document.getElementById("addSecretBtn")?.addEventListener("click", addTextSecret);
+  document.getElementById("uploadSecretBtn")?.addEventListener("click", uploadSecretFile);
+  document.getElementById("reloadSecretsBtn")?.addEventListener("click", loadSecrets);
 
   document.getElementById("loadMemoryBtn")?.addEventListener("click", loadMemory);
   document.getElementById("saveMemoryBtn")?.addEventListener("click", saveMemory);
@@ -673,6 +756,14 @@ function wireEvents() {
 
     const sessionFile = target.getAttribute("data-session-file");
     if (sessionFile) await loadSessionDetails(sessionFile);
+
+    const deleteSecret = target.getAttribute("data-delete-secret");
+    if (deleteSecret) {
+      await requestJson(`/api/secrets/${encodeURIComponent(deleteSecret)}`, { method: "DELETE" });
+      showToast("Sekret usunięty.");
+      await loadSecrets();
+      return;
+    }
   });
 
   initLogTableEvents();
@@ -685,7 +776,7 @@ async function bootstrap() {
   wireEvents();
   await Promise.all([
     refreshState(), loadCharacter(), loadPersonality(),
-    loadGameFiles(), loadSessions(), loadGameLog(), loadDiscordStatus(), loadMemory(),
+    loadGameFiles(), loadSessions(), loadGameLog(), loadDiscordStatus(), loadMemory(), loadSecrets(),
   ]);
   setInterval(async () => {
     await refreshState();

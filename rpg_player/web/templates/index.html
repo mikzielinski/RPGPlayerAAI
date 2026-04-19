@@ -22,6 +22,7 @@
         <button class="tab-btn" data-tab="zasoby">Zasoby</button>
         <button class="tab-btn" data-tab="pamiec">Pamięć</button>
         <button class="tab-btn" data-tab="discord">Discord</button>
+        <button class="tab-btn" data-tab="sekrety">Sekrety</button>
       </nav>
       <button id="refreshStateBtn" class="btn btn-ghost btn-sm">↻ Odśwież</button>
     </header>
@@ -407,6 +408,75 @@
             <strong>connected: true</strong>. Bot wejdzie na kanał głosowy i zapyta graczy o prezentację postaci.
           </p>
           <pre id="discordStatusView" class="console console-tall"></pre>
+        </section>
+
+      </div>
+    </main>
+
+    <!-- TAB: Sekrety -->
+    <main class="tab-content" id="tab-sekrety">
+      <div class="page-grid">
+
+        <section class="card">
+          <div class="card-header"><h2>Dodaj sekret (tekst)</h2></div>
+          <p class="help-text">Wpisz prywatną informację dla postaci — znana tylko jej, niewidoczna dla innych graczy.</p>
+          <div class="form-row">
+            <label for="secretTitle">Tytuł</label>
+            <input id="secretTitle" type="text" placeholder="np. Tajemnica rodu, Wskazówka MG..." />
+          </div>
+          <div class="form-row">
+            <label for="secretSource">Źródło</label>
+            <select id="secretSource">
+              <option value="gm">MG (Game Master)</option>
+              <option value="player">Gracz</option>
+              <option value="system">System / Event</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="secretText">Treść sekretu</label>
+            <textarea id="secretText" rows="5" placeholder="Treść tajemnej informacji, zagadki lub wskazówki..."></textarea>
+          </div>
+          <div class="actions">
+            <button id="addSecretBtn" class="btn btn-primary">Dodaj sekret</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header"><h2>Dodaj sekret (plik)</h2></div>
+          <p class="help-text">
+            Wgraj plik z zagadką lub wskazówką. Obsługiwane formaty:
+            <strong>txt, pdf</strong> (ekstrakcja tekstu),
+            <strong>png, jpg, jpeg, gif, webp</strong> (opis przez AI).
+          </p>
+          <div class="form-row">
+            <label for="secretFileTitle">Tytuł</label>
+            <input id="secretFileTitle" type="text" placeholder="np. Mapa zagadki, Zaszyfrowana wiadomość..." />
+          </div>
+          <div class="form-row">
+            <label for="secretFileSource">Źródło</label>
+            <select id="secretFileSource">
+              <option value="gm">MG (Game Master)</option>
+              <option value="player">Gracz</option>
+              <option value="system">System / Event</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="secretFile">Plik</label>
+            <input id="secretFile" type="file" accept=".txt,.pdf,.png,.jpg,.jpeg,.gif,.webp" />
+          </div>
+          <div class="actions">
+            <button id="uploadSecretBtn" class="btn btn-primary">Wgraj plik</button>
+          </div>
+          <p class="help-text mt-2" id="secretUploadProgress" style="display:none">Przetwarzanie pliku (może chwilę zająć dla obrazów)...</p>
+        </section>
+
+        <section class="card span-2">
+          <div class="card-header">
+            <h2>Aktywne sekrety</h2>
+            <button id="reloadSecretsBtn" class="btn btn-sm">Odśwież</button>
+          </div>
+          <p class="help-text">Wszystkie sekrety są wstrzykiwane do kontekstu postaci przy każdym jej ruchu.</p>
+          <div id="secretsList"></div>
         </section>
 
       </div>

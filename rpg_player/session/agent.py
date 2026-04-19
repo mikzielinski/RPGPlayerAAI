@@ -184,6 +184,7 @@ def run_agent(
     session_context: str = "",
     general_context: str = "",
     game_context: str = "",
+    secrets_context: str = "",
     known_players: Optional[list[str]] = None,
     token_tracker=None,
 ) -> str:
@@ -200,6 +201,8 @@ def run_agent(
         general_context=general_context,
         game_context=game_context,
     )
+    if secrets_context:
+        system_prompt += "\n\n" + secrets_context
     if behavior_instructions:
         system_prompt += "\n" + behavior_instructions
 
