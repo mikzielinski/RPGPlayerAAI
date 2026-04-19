@@ -571,11 +571,15 @@ def main() -> None:
 
     # 6. Start listener and session
     listener = Listener(char_name=char_name, registry=registry)
+    # Apply saved mic-mute state before starting (persists across restarts)
+    if Path(config.MIC_MUTE_FLAG).exists():
+        listener.mute()
     listener.start()
 
     tts.speak(f"Gotowy. Jestem {char_name}. Zaczynamy sesje.")
     dash.update(status="LISTENING")
-    dash.log(f"Sesja aktywna — {char_name} · cooldown: {cooldown_sec}s")
+    mic_mode = "CZAT" if listener.is_muted() else "GŁOS"
+    dash.log(f"Sesja aktywna — {char_name} · cooldown: {cooldown_sec}s · tryb: {mic_mode}")
     dash.log(
         "[dim]Klawisze: [f] wymus odpowiedz · [v] zmien glos · [q] zakoncz | "
         f"tryb: {config.RESPONSE_MODE}[/dim]"
@@ -633,6 +637,15 @@ def main() -> None:
                             dash.log(f"[cyan][chat] {speaker}: {text}[/cyan]")
                 except Exception as exc:
                     dash.log(f"[dim]Błąd odczytu kolejki czatu: {exc}[/dim]")
+
+            # Mic mute/unmute from web panel
+            mic_flag = Path(config.MIC_MUTE_FLAG)
+            if mic_flag.exists() and not listener.is_muted():
+                listener.mute()
+                dash.log("[yellow]Mikrofon wyciszony — tryb czatu.[/yellow]")
+            elif not mic_flag.exists() and listener.is_muted():
+                listener.unmute()
+                dash.log("[green]Mikrofon aktywny — tryb głosowy.[/green]")
 
             # Voice change
             if input_handler.consume_voice_next():

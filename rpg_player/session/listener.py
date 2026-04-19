@@ -121,6 +121,9 @@ class Listener:
         """Resume microphone transcription in session mode."""
         self._muted = False
 
+    def is_muted(self) -> bool:
+        return self._muted
+
     def get_buffer(self) -> list[dict]:
         with self._lock:
             return list(self._buffer)

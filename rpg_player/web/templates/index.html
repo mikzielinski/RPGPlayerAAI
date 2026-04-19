@@ -49,6 +49,22 @@
             <button id="validateBtn" class="btn">✓ Waliduj setup</button>
             <button id="ingestBtn" class="btn">⬆ Ingest plików</button>
           </div>
+
+          <div class="section-divider mt-2">Tryb wejścia</div>
+          <div class="mode-toggle-row">
+            <button id="modeVoiceBtn" class="btn mode-btn mode-btn-active" data-mode="voice">
+              🎤 Głos
+            </button>
+            <button id="modeChatBtn" class="btn mode-btn" data-mode="chat">
+              💬 Czat
+            </button>
+            <span id="modeStatusText" class="mode-status-text">Mikrofon aktywny</span>
+          </div>
+          <p class="help-text">
+            <strong>Głos</strong> — bot nasłuchuje mikrofonu (Whisper STT).<br/>
+            <strong>Czat</strong> — mikrofon wyciszony, tylko wpisany tekst z zakładki Chat.
+          </p>
+
           <div class="section-divider mt-2">Bufor kontekstu</div>
           <div class="buffer-bar-wrap">
             <div class="buffer-bar-label">
@@ -540,9 +556,18 @@
           </section>
 
           <section class="card mt-2">
-            <div class="card-header"><h2>Aktywność</h2></div>
+            <div class="card-header"><h2>Aktywność bota</h2></div>
             <div id="chatActivityBadge" class="badge badge-off" style="margin:4px 0">—</div>
             <p id="chatActivityDetail" class="help-text mt-1" style="min-height:1.2em"></p>
+          </section>
+
+          <section class="card mt-2">
+            <div class="card-header"><h2>Tryb wejścia</h2></div>
+            <div class="mode-toggle-row">
+              <button class="btn mode-btn" data-mode="voice" id="chatModeVoiceBtn">🎤 Głos</button>
+              <button class="btn mode-btn" data-mode="chat" id="chatModeChatBtn">💬 Czat</button>
+            </div>
+            <p id="chatModeStatusText" class="help-text mt-1">—</p>
           </section>
         </div>
 

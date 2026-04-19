@@ -73,6 +73,7 @@ function renderHealthRow(status) {
   const flags = status.flags || {};
   const bot = status.bot || {};
 
+  const micMuted = !!flags.mic_muted;
   const checks = [
     { label: "Bot", ok: bot.running, val: bot.running ? `Działa (PID ${bot.pid || "?"})` : "Zatrzymany" },
     { label: "API Key", ok: flags.has_openai_key, val: flags.has_openai_key ? "Skonfigurowany" : "Brak klucza" },
@@ -83,6 +84,7 @@ function renderHealthRow(status) {
       ok: (flags.game_files_count || 0) > 0,
       val: `${flags.game_files_count || 0} plik${(flags.game_files_count || 0) === 1 ? "" : "ów"}`,
     },
+    { label: "Mikrofon", ok: !micMuted, val: micMuted ? "Wyciszony (czat)" : "Aktywny (głos)" },
   ];
 
   el.innerHTML = checks
@@ -366,6 +368,7 @@ async function refreshState() {
   const buf = status.bot?.buffer || [];
   renderContextWindow(buf);
   renderNowView(buf);
+  applyModeUI(!!(status.flags?.mic_muted));
 
   if (!state.envFormDirty) {
     const env = status.env || {};
@@ -711,6 +714,41 @@ function stopChatPolling() {
   if (_chatPollInterval) { clearInterval(_chatPollInterval); _chatPollInterval = null; }
 }
 
+// ── Input mode (voice / chat) ────────────────────────────────────────
+async function setInputMode(mode) {
+  try {
+    await requestJson("/api/bot/mode", { method: "POST", body: JSON.stringify({ mode }) });
+    applyModeUI(mode === "chat");
+    showToast(mode === "chat" ? "Tryb czatu — mikrofon wyciszony." : "Tryb głosowy — mikrofon aktywny.");
+  } catch (err) {
+    showToast(`Błąd zmiany trybu: ${err.message}`, true);
+  }
+}
+
+function applyModeUI(muted) {
+  const label = muted ? "💬 Czat — mikrofon wyciszony" : "🎤 Głos — mikrofon aktywny";
+
+  // Panel tab
+  ["modeVoiceBtn", "modeChatBtn"].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    const isActive = muted ? btn.dataset.mode === "chat" : btn.dataset.mode === "voice";
+    btn.classList.toggle("mode-btn-active", isActive);
+  });
+  const txt = document.getElementById("modeStatusText");
+  if (txt) txt.textContent = muted ? "Mikrofon wyciszony" : "Mikrofon aktywny";
+
+  // Chat tab sidebar
+  ["chatModeVoiceBtn", "chatModeChatBtn"].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    const isActive = muted ? btn.dataset.mode === "chat" : btn.dataset.mode === "voice";
+    btn.classList.toggle("mode-btn-active", isActive);
+  });
+  const chatTxt = document.getElementById("chatModeStatusText");
+  if (chatTxt) chatTxt.textContent = label;
+}
+
 // ── Force turn ───────────────────────────────────────────────────────
 async function forceTurn() {
   const res = await requestJson("/api/bot/force", { method: "POST" });
@@ -910,6 +948,12 @@ function wireEvents() {
   document.getElementById("stopBotBtn").addEventListener("click", stopBot);
   document.getElementById("flushBufferBtn").addEventListener("click", flushBuffer);
   document.getElementById("forceTurnBtn")?.addEventListener("click", forceTurn);
+
+  ["modeVoiceBtn", "modeChatBtn", "chatModeVoiceBtn", "chatModeChatBtn"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("click", (e) => {
+      setInputMode(e.currentTarget.dataset.mode);
+    });
+  });
   document.getElementById("validateBtn").addEventListener("click", validateSetup);
   document.getElementById("ingestBtn").addEventListener("click", ingestFiles);
   document.getElementById("saveEnvBtn").addEventListener("click", saveEnv);

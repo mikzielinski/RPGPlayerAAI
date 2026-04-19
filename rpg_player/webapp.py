@@ -283,6 +283,7 @@ def _system_status(process_manager: BotProcessManager) -> dict[str, Any]:
             "sessions_count": len(sessions),
             "buffer_current": buffer_current,
             "has_game_type": GAME_TYPE_PATH.exists(),
+            "mic_muted": Path(config.MIC_MUTE_FLAG).exists(),
         },
         "game_type": _safe_read_json(GAME_TYPE_PATH)[0] or {},
         "env": {
@@ -635,6 +636,25 @@ def create_app() -> Flask:
         flag_path.parent.mkdir(parents=True, exist_ok=True)
         flag_path.touch()
         return jsonify({"ok": True, "message": "Sygnał wymuszonej odpowiedzi wysłany."})
+
+    @app.get("/api/bot/mode")
+    def api_get_mode():
+        muted = Path(config.MIC_MUTE_FLAG).exists()
+        return jsonify({"mode": "chat" if muted else "voice", "mic_muted": muted})
+
+    @app.post("/api/bot/mode")
+    def api_set_mode():
+        payload = request.get_json(silent=True) or {}
+        mode = str(payload.get("mode", "")).strip().lower()
+        if mode not in {"voice", "chat"}:
+            return jsonify({"ok": False, "message": "Tryb musi być 'voice' lub 'chat'."}), 400
+        flag_path = Path(config.MIC_MUTE_FLAG)
+        flag_path.parent.mkdir(parents=True, exist_ok=True)
+        if mode == "chat":
+            flag_path.touch()
+        else:
+            flag_path.unlink(missing_ok=True)
+        return jsonify({"ok": True, "mode": mode, "mic_muted": mode == "chat"})
 
     @app.get("/api/bot/activity")
     def api_bot_activity():

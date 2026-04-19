@@ -64,6 +64,8 @@ BUFFER_FLUSH_FLAG = os.path.join(_DATA_DIR, ".flush_buffer_request")
 FORCE_TURN_FLAG = os.path.join(_DATA_DIR, ".force_turn_request")
 CHAT_QUEUE_FILE = os.path.join(_DATA_DIR, ".chat_queue.jsonl")
 CHAT_HISTORY_FILE = os.path.join(_DATA_DIR, "chat_history.jsonl")
+# When this file exists the microphone is muted (chat-only mode).
+MIC_MUTE_FLAG = os.path.join(_DATA_DIR, ".mic_muted")
 
 # Auto-flush the context window when fill reaches this fraction (0.0–1.0).
 # Before flushing, the window is summarised into context_general asynchronously.
