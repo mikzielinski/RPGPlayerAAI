@@ -264,9 +264,9 @@ class DiscordConnector:
 
     # ── Pending message queue ────────────────────────────────────────────────
 
-    def _queue_for_inject(self, speaker: str, text: str) -> None:
+    def _queue_for_inject(self, speaker: str, text: str, force: bool = False) -> None:
         with self._lock:
-            self._pending.append({"speaker": speaker, "text": text})
+            self._pending.append({"speaker": speaker, "text": text, "force": force})
 
     def pop_pending_messages(self) -> list[dict]:
         with self._lock:
@@ -507,19 +507,29 @@ class DiscordConnector:
                 content = (message.content or "").strip()
                 if not content:
                     return
+
+                # Strip @mentions from text so they don't confuse classifier/agent
+                clean = re.sub(r"<@!?\d+>", "", content).strip() or content
+
+                # Determine whether to force a bot turn:
+                # - @mention of the bot → always respond
+                # - text-only mode → respond to every message (it's a chat bot)
+                bot_mentioned = self.user in message.mentions
+                force = bot_mentioned or config.DISCORD_TEXT_ONLY
+
                 speaker = message.author.display_name
                 connector._push_message({
                     "time": connector._utc_iso(),
                     "author": speaker,
-                    "text": content,
+                    "text": clean,
                     "channel": getattr(message.channel, "name", ""),
                 })
                 if connector._registry:
-                    detected = connector._registry.process(content)
+                    detected = connector._registry.process(clean)
                     if detected:
                         speaker = detected
                 connector._remember_known_user(speaker)
-                connector._queue_for_inject(speaker, content)
+                connector._queue_for_inject(speaker, clean, force=force)
 
             async def on_voice_state_update(self, member: Any, before: Any, after: Any) -> None:
                 if member.bot:

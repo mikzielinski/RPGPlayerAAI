@@ -651,6 +651,8 @@ def main() -> None:
                 for dmsg in discord_connector.pop_pending_messages():
                     listener.inject_text(dmsg["text"], dmsg["speaker"])
                     dash.log(f"[blue][discord] {dmsg['speaker']}: {dmsg['text']}[/blue]")
+                    if dmsg.get("force"):
+                        force = True
 
             # Chat-mode: inject typed messages from web panel
             chat_queue_path = Path(config.CHAT_QUEUE_FILE)
