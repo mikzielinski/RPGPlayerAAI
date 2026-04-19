@@ -3,7 +3,7 @@ const state = {
   envFormDirty: false,
   gameLogs: [],
   gameLogSort: { col: "timestamp", dir: "desc" },
-  gameLogFilter: { text: "", event: "", actor: "" },
+  gameLogFilter: { text: "", event: "!wait", actor: "" },
 };
 
 // ── Tabs ────────────────────────────────────────────────────────────
@@ -195,6 +195,7 @@ function _populateLogSelects(rows) {
 
   evSel.innerHTML =
     `<option value="">Wszystkie zdarzenia</option>` +
+    `<option value="!wait"${"!wait" === curEv ? " selected" : ""}>Bez wait</option>` +
     events.map((e) => `<option value="${e}"${e === curEv ? " selected" : ""}>${e}</option>`).join("");
 
   acSel.innerHTML =
@@ -212,7 +213,8 @@ function _redrawLogTable() {
   // Filter
   const { text, event, actor } = state.gameLogFilter;
   if (text) rows = rows.filter((r) => r.detail.toLowerCase().includes(text.toLowerCase()) || r.event.toLowerCase().includes(text.toLowerCase()));
-  if (event) rows = rows.filter((r) => r.event === event);
+  if (event === "!wait") rows = rows.filter((r) => r.event !== "wait");
+  else if (event) rows = rows.filter((r) => r.event === event);
   if (actor) rows = rows.filter((r) => r.actor === actor);
 
   // Sort
@@ -293,9 +295,9 @@ function initLogTableEvents() {
     _redrawLogTable();
   });
   filterClear?.addEventListener("click", () => {
-    state.gameLogFilter = { text: "", event: "", actor: "" };
+    state.gameLogFilter = { text: "", event: "!wait", actor: "" };
     if (filterText) filterText.value = "";
-    if (filterEvent) filterEvent.value = "";
+    if (filterEvent) filterEvent.value = "!wait";
     if (filterActor) filterActor.value = "";
     _redrawLogTable();
   });

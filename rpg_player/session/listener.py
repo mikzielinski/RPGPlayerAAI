@@ -7,6 +7,7 @@ instead of the generic "gracz" label.
 from __future__ import annotations
 
 import queue
+import re
 import ssl
 import threading
 import time
@@ -23,6 +24,38 @@ from rpg_player.session.speaker_registry import SpeakerRegistry
 _SAMPLE_RATE = 16000
 _CHANNELS = 1
 _CHUNK_FRAMES = 1024
+
+# Matches CJK, Hangul, Kana, Arabic, Devanagari and similar non-Latin scripts
+# that Whisper hallucinates when it hears music or ambient noise.
+_NON_LATIN_RE = re.compile(
+    r"[\u2E80-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF"
+    r"\u3000-\u303F\u0600-\u06FF\u0900-\u097F"
+    r"\u0E00-\u0E7F\u1100-\u11FF]"
+)
+
+# Common Whisper hallucination phrases triggered by music / silence
+_HALLUCINATION_PHRASES = re.compile(
+    r"(napisy\s+wykona|subskrybuj|subscribe|przetłumaczon|tłumacz:|lektor:|"
+    r"music playing|applause|inaudible|\[.*?\]|\(.*?\))",
+    re.IGNORECASE,
+)
+
+
+def _is_valid_transcription(text: str) -> bool:
+    """Return False for obvious Whisper hallucinations."""
+    if not text:
+        return False
+    # Non-Latin script → hallucination from music/ambient
+    if _NON_LATIN_RE.search(text):
+        return False
+    # Very low alphabetic ratio → mostly noise / punctuation
+    alpha = sum(1 for ch in text if ch.isalpha())
+    if alpha / max(len(text), 1) < 0.30:
+        return False
+    # Known hallucination phrase patterns
+    if _HALLUCINATION_PHRASES.search(text):
+        return False
+    return True
 
 
 class Listener:
@@ -194,7 +227,7 @@ class Listener:
                                 initial_prompt=config.WHISPER_INITIAL_PROMPT,
                             )
                             text = result["text"].strip()
-                            if text and len(text.split()) >= 2 and not self._muted:
+                            if len(text.split()) >= 2 and _is_valid_transcription(text) and not self._muted:
                                 speaker = "gracz"
                                 if self._registry:
                                     detected = self._registry.process(text)

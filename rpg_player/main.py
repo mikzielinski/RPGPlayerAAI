@@ -4,6 +4,7 @@ from __future__ import annotations
 import atexit
 import hashlib
 import json
+import signal
 import sys
 import termios
 import threading
@@ -417,6 +418,11 @@ def _process_bot_turn(
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    # SIGTERM (web panel Stop button) → treat as Ctrl+C so finally-block saves session
+    def _handle_sigterm(_sig, _frame):
+        raise KeyboardInterrupt()
+    signal.signal(signal.SIGTERM, _handle_sigterm)
+
     # Session memory check before dashboard starts (needs stdin)
     session_memory = SessionMemory()
     previous_session = _ask_continue_session(session_memory)
