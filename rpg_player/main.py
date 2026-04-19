@@ -616,6 +616,24 @@ def main() -> None:
                 for p in all_players:
                     p._last_wait_hash = ""
 
+            # Chat-mode: inject typed messages from web panel
+            chat_queue_path = Path(config.CHAT_QUEUE_FILE)
+            if chat_queue_path.exists():
+                try:
+                    lines = chat_queue_path.read_text(encoding="utf-8").splitlines()
+                    chat_queue_path.unlink()
+                    for line in lines:
+                        if not line.strip():
+                            continue
+                        entry = json.loads(line)
+                        text = entry.get("text", "").strip()
+                        speaker = entry.get("speaker", "gracz")
+                        if text:
+                            listener.inject_text(text, speaker)
+                            dash.log(f"[cyan][chat] {speaker}: {text}[/cyan]")
+                except Exception as exc:
+                    dash.log(f"[dim]Błąd odczytu kolejki czatu: {exc}[/dim]")
+
             # Voice change
             if input_handler.consume_voice_next():
                 new_voice = tts.next_voice()

@@ -616,6 +616,101 @@ async function loadSessionDetails(file) {
 }
 
 // ── Wire events ───────────────────────────────────────────────────────
+// ── Chat mode ────────────────────────────────────────────────────────
+let _chatPollInterval = null;
+let _lastChatTs = "";
+
+function _chatBubble(msg) {
+  const isBot = msg.role === "bot";
+  const speaker = (msg.speaker || (isBot ? "bot" : "gracz")).replace(/</g, "&lt;");
+  const text = (msg.text || "").replace(/</g, "&lt;").replace(/\n/g, "<br/>");
+  const time = msg.ts ? new Date(msg.ts).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+  return `<div class="chat-bubble ${isBot ? "chat-bubble-bot" : "chat-bubble-user"}">
+    <div class="chat-bubble-meta">
+      <span class="chat-speaker">${speaker}</span>
+      <span class="chat-time">${time}</span>
+    </div>
+    <div class="chat-bubble-text">${text}</div>
+  </div>`;
+}
+
+async function loadChatHistory() {
+  try {
+    const data = await requestJson("/api/chat/history");
+    const msgs = data.history || [];
+    const el = document.getElementById("chatMessages");
+    if (!el) return;
+
+    if (!msgs.length) {
+      el.innerHTML = '<div class="chat-empty">Brak wiadomości. Wpisz coś poniżej.</div>';
+      return;
+    }
+
+    const lastTs = msgs[msgs.length - 1]?.ts || "";
+    const isNew = lastTs !== _lastChatTs;
+    _lastChatTs = lastTs;
+
+    el.innerHTML = msgs.map(_chatBubble).join("");
+    if (isNew) el.scrollTop = el.scrollHeight;
+  } catch (_) {}
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById("chatInput");
+  const speakerEl = document.getElementById("chatSpeaker");
+  const text = (input?.value || "").trim();
+  if (!text) return;
+  const speaker = (speakerEl?.value || "gracz").trim() || "gracz";
+
+  input.value = "";
+  input.style.height = "";
+
+  try {
+    await requestJson("/api/chat/message", {
+      method: "POST",
+      body: JSON.stringify({ text, speaker }),
+    });
+    await loadChatHistory();
+  } catch (err) {
+    showToast(`Błąd wysyłania: ${err.message}`, true);
+  }
+}
+
+async function clearChatHistory() {
+  await requestJson("/api/chat/history", { method: "DELETE" });
+  _lastChatTs = "";
+  await loadChatHistory();
+  showToast("Historia czatu wyczyszczona.");
+}
+
+function startChatPolling() {
+  if (_chatPollInterval) return;
+  _chatPollInterval = setInterval(async () => {
+    await loadChatHistory();
+    // mirror activity badge into chat sidebar
+    try {
+      const data = await requestJson("/api/bot/activity");
+      const badge = document.getElementById("chatActivityBadge");
+      const detail = document.getElementById("chatActivityDetail");
+      if (badge) {
+        const s = (data.status || "unknown").toUpperCase();
+        badge.textContent = _ACTIVITY_LABELS[s] || s;
+        badge.className = `badge ${_ACTIVITY_CLASS[s] || "badge-off"}`;
+      }
+      if (detail) {
+        const parts = [];
+        if (data.actor) parts.push(data.actor);
+        if (data.detail) parts.push(data.detail);
+        detail.textContent = parts.join(" — ");
+      }
+    } catch (_) {}
+  }, 1500);
+}
+
+function stopChatPolling() {
+  if (_chatPollInterval) { clearInterval(_chatPollInterval); _chatPollInterval = null; }
+}
+
 // ── Force turn ───────────────────────────────────────────────────────
 async function forceTurn() {
   const res = await requestJson("/api/bot/force", { method: "POST" });
@@ -823,6 +918,20 @@ function wireEvents() {
   document.getElementById("reloadDiscordBtn")?.addEventListener("click", loadDiscordStatus);
   document.getElementById("reloadSessionsBtn").addEventListener("click", loadSessions);
   document.getElementById("uploadForm").addEventListener("submit", uploadFiles);
+
+  document.getElementById("chatSendBtn")?.addEventListener("click", sendChatMessage);
+  document.getElementById("chatInput")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
+  });
+  document.getElementById("clearChatBtn")?.addEventListener("click", clearChatHistory);
+
+  // Start/stop chat polling based on active tab
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.tab === "chat") { loadChatHistory(); startChatPolling(); }
+      else stopChatPolling();
+    });
+  });
 
   document.getElementById("addSecretBtn")?.addEventListener("click", addTextSecret);
   document.getElementById("uploadSecretBtn")?.addEventListener("click", uploadSecretFile);

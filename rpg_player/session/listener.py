@@ -134,6 +134,11 @@ class Listener:
         """Record bot's own spoken turn into the buffer."""
         self._append_exchange(self._char_name, text)
 
+    def inject_text(self, text: str, speaker: str = "gracz") -> None:
+        """Inject a typed message directly into the buffer, bypassing microphone."""
+        if text.strip():
+            self._append_exchange(speaker, text.strip())
+
     def flush_keeping_last(self) -> None:
         """Clear the buffer but retain the most recent utterance for context continuity."""
         with self._lock:

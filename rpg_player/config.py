@@ -62,6 +62,8 @@ BUFFER_MAX_EXCHANGES_LIMIT = 40
 # Flag file written by the web panel to request a buffer flush from the running bot.
 BUFFER_FLUSH_FLAG = os.path.join(_DATA_DIR, ".flush_buffer_request")
 FORCE_TURN_FLAG = os.path.join(_DATA_DIR, ".force_turn_request")
+CHAT_QUEUE_FILE = os.path.join(_DATA_DIR, ".chat_queue.jsonl")
+CHAT_HISTORY_FILE = os.path.join(_DATA_DIR, "chat_history.jsonl")
 
 # Auto-flush the context window when fill reaches this fraction (0.0–1.0).
 # Before flushing, the window is summarised into context_general asynchronously.

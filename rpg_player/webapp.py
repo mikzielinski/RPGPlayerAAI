@@ -669,6 +669,70 @@ def create_app() -> Flask:
         _safe_write_json(GENERAL_CONTEXT_PATH, data)
         return jsonify({"ok": True, "message": "Pamięć ogólna zapisana."})
 
+    @app.post("/api/chat/message")
+    def api_chat_message():
+        payload = request.get_json(silent=True) or {}
+        text = str(payload.get("text", "")).strip()
+        speaker = str(payload.get("speaker", "gracz")).strip() or "gracz"
+        if not text:
+            return jsonify({"ok": False, "message": "Brak treści wiadomości."}), 400
+
+        queue_path = Path(config.CHAT_QUEUE_FILE)
+        queue_path.parent.mkdir(parents=True, exist_ok=True)
+        entry_q = json.dumps({"text": text, "speaker": speaker}, ensure_ascii=False)
+        with open(queue_path, "a", encoding="utf-8") as fq:
+            fq.write(entry_q + "\n")
+
+        history_path = Path(config.CHAT_HISTORY_FILE)
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        import datetime as _dt
+        entry_h = json.dumps({
+            "role": "user",
+            "speaker": speaker,
+            "text": text,
+            "ts": _dt.datetime.utcnow().isoformat() + "Z",
+        }, ensure_ascii=False)
+        with open(history_path, "a", encoding="utf-8") as fh:
+            fh.write(entry_h + "\n")
+
+        return jsonify({"ok": True, "message": "Wiadomość wysłana."})
+
+    @app.get("/api/chat/history")
+    def api_chat_history():
+        history_path = Path(config.CHAT_HISTORY_FILE)
+        user_msgs: list[dict] = []
+        if history_path.exists():
+            for raw in history_path.read_text(encoding="utf-8").splitlines():
+                try:
+                    user_msgs.append(json.loads(raw))
+                except Exception:
+                    pass
+
+        game_logs = GameLog.list_logs()
+        bot_msgs: list[dict] = []
+        if game_logs:
+            for entry in GameLog.tail(game_logs[0], limit=80):
+                p = entry.get("payload", {})
+                ev = p.get("event", entry.get("type", ""))
+                if ev == "bot_response":
+                    bot_msgs.append({
+                        "role": "bot",
+                        "speaker": p.get("actor", "bot"),
+                        "text": p.get("detail", ""),
+                        "ts": entry.get("timestamp", ""),
+                    })
+
+        combined = user_msgs + bot_msgs
+        combined.sort(key=lambda x: x.get("ts", ""))
+        return jsonify({"history": combined[-60:]})
+
+    @app.delete("/api/chat/history")
+    def api_clear_chat_history():
+        history_path = Path(config.CHAT_HISTORY_FILE)
+        if history_path.exists():
+            history_path.unlink()
+        return jsonify({"ok": True, "message": "Historia czatu wyczyszczona."})
+
     @app.get("/api/secrets")
     def api_list_secrets():
         return jsonify({"secrets": secrets_manager.list_secrets()})
