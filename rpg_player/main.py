@@ -467,6 +467,8 @@ def main() -> None:
         cooldown_total=cooldown_sec,
         voice_name=tts.current_voice,
         known_players=registry.known_players,
+        response_mode=config.RESPONSE_MODE,
+        buffer_max_exchanges=config.BUFFER_MAX_EXCHANGES,
     )
     game_log.log_event(
         event="session_ready",
@@ -539,11 +541,15 @@ def main() -> None:
             cooldown_remaining = max(
                 0.0, cooldown_sec - (now - primary_player.last_speak_up_time)
             )
+            _mem = memory_manager.as_dict()
             dash.update(
                 cooldown_remaining=cooldown_remaining,
                 buffer=listener.get_buffer(),
                 known_players=registry.known_players,
                 token_summary=primary_player.token_tracker.summary(),
+                memory_summarizing=memory_manager.is_summarizing,
+                memory_last_updated=_mem.get("last_updated", ""),
+                memory_notes_count=len(_mem.get("session_notes", [])),
             )
             if config.DISCORD_ENABLED:
                 discord_connector.update_presence(registry.known_players)
