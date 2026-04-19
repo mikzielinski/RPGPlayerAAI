@@ -715,6 +715,10 @@ def create_app() -> Flask:
         with open(history_path, "a", encoding="utf-8") as fh:
             fh.write(entry_h + "\n")
 
+        flag_path = Path(config.FORCE_TURN_FLAG)
+        flag_path.parent.mkdir(parents=True, exist_ok=True)
+        flag_path.touch()
+
         return jsonify({"ok": True, "message": "Wiadomość wysłana."})
 
     @app.get("/api/chat/history")

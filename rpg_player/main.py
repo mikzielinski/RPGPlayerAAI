@@ -168,7 +168,11 @@ def _personality_info(personality: dict) -> str:
 
 
 def _is_direct_question_to_character(buffer: list[dict], char_name: str) -> bool:
-    """Heuristic: last non-bot utterance is a direct question to this character."""
+    """Heuristic: last non-bot utterance is a direct question to this character.
+
+    Whisper rarely adds '?' in Polish, so we don't require it — any sentence
+    with the character's name or a turn-handing phrase counts.
+    """
     if not buffer:
         return False
 
@@ -177,8 +181,6 @@ def _is_direct_question_to_character(buffer: list[dict], char_name: str) -> bool
     text = str(last.get("text", "")).strip().lower()
     name = char_name.lower()
     if not text or speaker == name:
-        return False
-    if "?" not in text:
         return False
 
     if name in text:
@@ -190,6 +192,13 @@ def _is_direct_question_to_character(buffer: list[dict], char_name: str) -> bool
         "co robisz",
         "co zamierzasz",
         "co chcesz zrobic",
+        "co chcesz",
+        "wasza kolej",
+        "co zamierzacie",
+        "co robicie",
+        "twoja akcja",
+        "wasza akcja",
+        "co teraz",
     )
     return any(phrase in text for phrase in direct_phrases)
 
@@ -598,7 +607,7 @@ def main() -> None:
                 )
                 break
 
-            time.sleep(0.5)
+            time.sleep(0.2)
 
             # Buffer flush requested from web panel
             flush_flag = Path(config.BUFFER_FLUSH_FLAG)

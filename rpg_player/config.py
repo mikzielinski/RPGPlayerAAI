@@ -33,7 +33,7 @@ OPENAI_TTS_EMOTION_SPEED = {
 
 # STT
 WHISPER_MODEL = "base"  # or "small" for better accuracy
-SILENCE_THRESHOLD_SEC = 1.5
+SILENCE_THRESHOLD_SEC = float(os.environ.get("SILENCE_THRESHOLD_SEC", "1.5"))
 WHISPER_LANGUAGE = os.environ.get("WHISPER_LANGUAGE", "pl").strip().lower() or "pl"
 WHISPER_ENERGY_THRESHOLD = int(os.environ.get("WHISPER_ENERGY_THRESHOLD", "800"))
 WHISPER_INSECURE_SSL = os.environ.get("WHISPER_INSECURE_SSL", "0").strip().lower() in {
