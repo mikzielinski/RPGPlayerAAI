@@ -641,6 +641,70 @@ def create_app() -> Flask:
     def api_discord_status():
         return jsonify(_discord_status())
 
+    @app.post("/api/discord/test")
+    def api_discord_test():
+        """Quick REST-only connection test — no gateway/websocket needed."""
+        import urllib.request
+        import urllib.error
+
+        env_file = _load_env_file()
+        token = env_file.get("DISCORD_BOT_TOKEN", "").strip()
+        guild_id = env_file.get("DISCORD_GUILD_ID", "").strip()
+        channel_id = env_file.get("DISCORD_TEXT_CHANNEL_ID", "").strip()
+
+        if not token:
+            return jsonify({"ok": False, "step": "token", "message": "DISCORD_BOT_TOKEN nie ustawiony w .env"})
+
+        base = "https://discord.com/api/v10"
+        headers = {"Authorization": f"Bot {token}", "Content-Type": "application/json"}
+
+        def _get(path: str):
+            req = urllib.request.Request(f"{base}{path}", headers=headers)
+            with urllib.request.urlopen(req, timeout=8) as r:
+                return json.loads(r.read().decode())
+
+        # 1. Verify token — get bot user info
+        try:
+            me = _get("/users/@me")
+        except urllib.error.HTTPError as e:
+            code = e.code
+            msg = "Nieprawidłowy token" if code in (401, 403) else f"HTTP {code}"
+            return jsonify({"ok": False, "step": "token", "message": msg})
+        except Exception as e:
+            return jsonify({"ok": False, "step": "token", "message": f"Błąd sieci: {e}"})
+
+        result: dict = {
+            "ok": True,
+            "bot": f"{me.get('username')}#{me.get('discriminator', '0')}",
+            "bot_id": me.get("id"),
+        }
+
+        # 2. Check guild access
+        if guild_id:
+            try:
+                guild = _get(f"/guilds/{guild_id}")
+                result["guild"] = guild.get("name", guild_id)
+            except urllib.error.HTTPError as e:
+                result["guild_error"] = f"Brak dostępu do serwera ({e.code}) — czy bot jest na serwerze?"
+                result["ok"] = False
+                return jsonify(result)
+            except Exception as e:
+                result["guild_error"] = str(e)
+
+        # 3. Check text channel access
+        if channel_id:
+            try:
+                ch = _get(f"/channels/{channel_id}")
+                result["channel"] = f"#{ch.get('name', channel_id)}"
+            except urllib.error.HTTPError as e:
+                result["channel_error"] = f"Brak dostępu do kanału ({e.code})"
+                result["ok"] = False
+                return jsonify(result)
+            except Exception as e:
+                result["channel_error"] = str(e)
+
+        return jsonify(result)
+
     @app.post("/api/bot/start")
     def api_bot_start():
         ok, message = manager.start()

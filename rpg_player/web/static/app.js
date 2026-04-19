@@ -531,6 +531,42 @@ async function loadDiscordStatus() {
   setDiscordStatus(res || {});
 }
 
+async function testDiscordConnection() {
+  const btn = document.getElementById("testDiscordBtn");
+  const view = document.getElementById("discordTestView");
+  if (!view) return;
+  view.style.display = "block";
+  view.textContent = "⏳ Testuję połączenie z Discord...";
+  if (btn) btn.disabled = true;
+  try {
+    const res = await requestJson("/api/discord/test", { method: "POST" });
+    if (res.ok) {
+      const lines = [
+        `✅ Token OK — bot: ${res.bot} (ID: ${res.bot_id})`,
+        res.guild   ? `✅ Serwer: ${res.guild}` : "",
+        res.channel ? `✅ Kanał: ${res.channel}` : "",
+      ].filter(Boolean);
+      view.textContent = lines.join("\n");
+      view.style.color = "var(--green, #4caf50)";
+    } else {
+      const lines = [
+        `❌ Błąd na kroku: ${res.step || "?"}`,
+        `   ${res.message || "nieznany błąd"}`,
+        res.guild_error   ? `❌ Serwer: ${res.guild_error}` : "",
+        res.channel_error ? `❌ Kanał: ${res.channel_error}` : "",
+        res.bot ? `ℹ Bot: ${res.bot}` : "",
+      ].filter(Boolean);
+      view.textContent = lines.join("\n");
+      view.style.color = "var(--red, #f44336)";
+    }
+  } catch (e) {
+    view.textContent = `❌ Błąd: ${e.message}`;
+    view.style.color = "var(--red, #f44336)";
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 // ── Save helpers ─────────────────────────────────────────────────────
 async function saveJsonFromEditor(editorId, endpoint) {
   const raw = document.getElementById(editorId).value.trim();
@@ -995,6 +1031,7 @@ function wireEvents() {
   document.getElementById("saveDiscordBtn")?.addEventListener("click", saveDiscord);
   document.getElementById("reloadGameLogBtn").addEventListener("click", loadGameLog);
   document.getElementById("reloadDiscordBtn")?.addEventListener("click", loadDiscordStatus);
+  document.getElementById("testDiscordBtn")?.addEventListener("click", testDiscordConnection);
   document.getElementById("reloadSessionsBtn").addEventListener("click", loadSessions);
   document.getElementById("uploadForm").addEventListener("submit", uploadFiles);
 

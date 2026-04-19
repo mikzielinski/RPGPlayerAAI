@@ -474,14 +474,17 @@
         <section class="card">
           <div class="card-header">
             <h2>Status Discord</h2>
-            <button id="reloadDiscordBtn" class="btn btn-sm">Odśwież</button>
+            <div style="display:flex;gap:.5rem">
+              <button id="testDiscordBtn" class="btn btn-sm btn-primary">⚡ Testuj połączenie</button>
+              <button id="reloadDiscordBtn" class="btn btn-sm">Odśwież</button>
+            </div>
           </div>
           <p class="help-text mb-2">
-            Górna sekcja pokazuje konfigurację z pliku <code>.env</code> (aktualizuje się od razu po zapisie).
-            Dolna sekcja <em>Połączenie</em> jest aktywna tylko gdy <strong>bot jest uruchomiony</strong>
-            (zakładka Panel → Start lub <code>./run.sh</code>).
-            Token jest przechowywany bezpiecznie w <code>.env</code> — pole jest puste z powodów bezpieczeństwa.
+            Górna sekcja pokazuje konfigurację z pliku <code>.env</code>.
+            <strong>⚡ Testuj połączenie</strong> weryfikuje token i dostęp do serwera/kanału przez Discord REST API — bez uruchamiania bota.
+            Dolna sekcja <em>Połączenie</em> jest aktywna gdy <strong>bot jest uruchomiony</strong> (Panel → Start).
           </p>
+          <pre id="discordTestView" class="console" style="min-height:3rem;margin-bottom:.5rem;display:none"></pre>
           <pre id="discordStatusView" class="console console-tall"></pre>
         </section>
 
