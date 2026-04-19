@@ -62,12 +62,54 @@ ok "Python $PYTHON_VER"
 
 # ffmpeg
 if command -v ffmpeg &>/dev/null; then
-    ok "ffmpeg found"
+    ok "ffmpeg found ($(ffmpeg -version 2>&1 | head -1 | awk '{print $3}'))"
 else
-    warn "ffmpeg not found — Whisper STT will not work"
-    echo -e "       ${DIM}Install: brew install ffmpeg  (macOS)"
-    echo -e "                sudo apt install ffmpeg  (Ubuntu)"
-    echo -e "                sudo dnf install ffmpeg  (Fedora)${RESET}"
+    warn "ffmpeg not found — Whisper STT and Discord voice will not work"
+    echo -e "       ${DIM}Install: brew install ffmpeg            (macOS)"
+    echo -e "                sudo apt install ffmpeg         (Ubuntu/Debian)"
+    echo -e "                sudo dnf install ffmpeg         (Fedora)"
+    echo -e "                choco install ffmpeg            (Windows)${RESET}"
+    # Hard-fail only when Discord voice mode is configured
+    if [ "${DISCORD_ENABLED:-0}" = "1" ] && [ "${DISCORD_TEXT_ONLY:-1}" = "0" ]; then
+        fail "ffmpeg is required for Discord voice mode (DISCORD_TEXT_ONLY=0)."
+    fi
+fi
+
+# libopus + libsodium — needed by discord.py[voice] for voice channel support
+DISCORD_VOICE_MODE=0
+if [ "${DISCORD_ENABLED:-0}" = "1" ] && [ "${DISCORD_TEXT_ONLY:-1}" = "0" ]; then
+    DISCORD_VOICE_MODE=1
+fi
+
+if [ "$DISCORD_VOICE_MODE" = "1" ]; then
+    info "Discord voice mode detected — checking native audio libraries..."
+    MISSING_LIBS=()
+
+    # Check libopus
+    if python3 -c "import ctypes; ctypes.cdll.LoadLibrary('libopus.so.0')" 2>/dev/null; then
+        ok "libopus found"
+    elif python3 -c "import ctypes; ctypes.cdll.LoadLibrary('libopus.dylib')" 2>/dev/null; then
+        ok "libopus found (macOS)"
+    else
+        MISSING_LIBS+=("libopus")
+    fi
+
+    # Check libsodium
+    if python3 -c "import ctypes; ctypes.cdll.LoadLibrary('libsodium.so')" 2>/dev/null || \
+       python3 -c "import ctypes; ctypes.cdll.LoadLibrary('libsodium.dylib')" 2>/dev/null; then
+        ok "libsodium found"
+    else
+        MISSING_LIBS+=("libsodium")
+    fi
+
+    if [ ${#MISSING_LIBS[@]} -gt 0 ]; then
+        warn "Missing native libraries for Discord voice: ${MISSING_LIBS[*]}"
+        echo -e "       ${DIM}Ubuntu/Debian: sudo apt install libopus-dev libsodium-dev"
+        echo -e "       macOS:         brew install opus libsodium"
+        echo -e "       Fedora:        sudo dnf install opus-devel libsodium-devel${RESET}"
+        echo ""
+        fail "Install the missing libraries above, then run again."
+    fi
 fi
 
 # ── Step 3 — Virtual environment & dependencies ───────────────────────────────
