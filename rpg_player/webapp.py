@@ -662,6 +662,31 @@ def create_app() -> Flask:
             game_log_entries = GameLog.tail(game_logs[0], limit=500)
 
         snap = manager.snapshot()
+        buffer_current, buffer_entries = _get_buffer_snapshot(game_logs)
+
+        # Full transcript: all bot_response + player speech from game log
+        transcript = []
+        for entry in game_log_entries:
+            p = entry.get("payload", {})
+            ev = p.get("event", entry.get("type", ""))
+            if ev in ("bot_response",):
+                transcript.append({
+                    "t": entry.get("timestamp", ""),
+                    "speaker": p.get("actor", "bot"),
+                    "text": p.get("detail", ""),
+                    "event": ev,
+                })
+            elif ev == "wait":
+                bt = p.get("buffer_tail")
+                if isinstance(bt, list) and bt:
+                    last = bt[-1]
+                    if last.get("speaker") not in (p.get("actor"), ""):
+                        transcript.append({
+                            "t": entry.get("timestamp", ""),
+                            "speaker": last.get("speaker", "gracz"),
+                            "text": last.get("text", ""),
+                            "event": "player_speech",
+                        })
 
         dump = {
             "generated_at": datetime.datetime.utcnow().isoformat() + "Z",
@@ -676,6 +701,8 @@ def create_app() -> Flask:
             "character": {"data": char_data, "error": char_err, "exists": CHARACTER_PATH.exists()},
             "personality": {"data": pers_data, "error": pers_err, "exists": PERSONALITY_PATH.exists()},
             "context_general": {"data": mem_data, "error": mem_err, "exists": GENERAL_CONTEXT_PATH.exists()},
+            "live_buffer": buffer_entries,
+            "transcript": transcript,
             "game_log": {
                 "file": str(game_logs[0]) if game_logs else None,
                 "entries": game_log_entries,
