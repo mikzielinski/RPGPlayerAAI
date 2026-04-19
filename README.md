@@ -227,45 +227,62 @@ It never looks instant.
 Once the session starts, a **Rich terminal dashboard** takes over the screen:
 
 ```
-╔══════════════════════════════════════════════════════════════╗
-║  ⚔  RPG AI Player Bot                                       ║
-╠══════════════════════════════════════════════════════════════╣
-║  🎤 LISTENING   Aldric  ·  Half-Elf Ranger Lv.1             ║
-╠══════════════════════╦═══════════════════════════════════════╣
-║  ⚔  Rozmowa         ║  📊  Status sesji                     ║
-║                      ║                                       ║
-║  unknown: Co robimy  ║  Decyzja:    MY_TURN                 ║
-║  unknown: Może lewą  ║  Styl:       Taktyk · umiarkowanie   ║
-║  ▶ Aldric: Czekaj,   ║  Cooldown:   ████████░░ 12s          ║
-║    znam to miejsce.  ║  Zachowania: group_debate, plot_twist ║
-║                      ║  Ostatnia:   Czekaj, znam to miejsce ║
-╠══════════════════════╩═══════════════════════════════════════╣
-║  📋  Dziennik zdarzeń                                        ║
-║  12:34:01  Postać 'Aldric' załadowana                        ║
-║  12:34:05  Sesja aktywna — cooldown: 45s                     ║
-║  12:35:22  Agent wywoływany [MY_TURN]                        ║
-║  12:35:25  Odpowiedź: Czekaj, znam to miejsce...             ║
-╚══════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════╗
+║  ⚔  RPG AI Player Bot                                           ║
+╠══════════════════════════════════════════════════════════════════╣
+║  << LISTENING  Aldric  ·  Half-Elf Ranger Lv.1  ·  MarekNeural ║
+╠═══════════════════════════════╦══════════════════════════════════╣
+║  Rozmowa przy stole           ║  Status sesji                   ║
+║                               ║                                 ║
+║  ████████░░░░ 10/15           ║  Decyzja:  MY_TURN              ║
+║                               ║  Tryb:     gm — gdy zagadnięty ║
+║    unknown: Co robimy?        ║  Bufor:    ████████░░ 10/15     ║
+║    unknown: Może lewą stronę  ║  Cooldown: gotowy               ║
+║  ▶ Aldric: Czekaj, znam to    ║  Tokeny:   12.4k tokenów        ║
+║            miejsce.           ║  Pamięć:   OK  14:22:01  8 fakt.║
+║                               ║  Gracze:   Marek, Kasia         ║
+║                               ║  Ostatnia: Czekaj, znam to m…  ║
+╠═══════════════════════════════╩══════════════════════════════════╣
+║  Dziennik zdarzeń                                               ║
+║  14:34:01  Postać 'Aldric' załadowana                           ║
+║  14:34:05  Sesja aktywna — cooldown: 45s                        ║
+║  14:35:22  Agent wywoływany [MY_TURN]                           ║
+║  14:35:25  Aldric: Czekaj, znam to miejsce...                   ║
+║                                                                 ║
+║    [f] wymuś odpowiedź   [v] zmień głos   [q] zakończ          ║
+╚══════════════════════════════════════════════════════════════════╝
 ```
 
-**Status indicators:**
+**Status badges:**
 
 | Badge | Meaning |
 |---|---|
-| `🎤 LISTENING` | Microphone active, waiting for speech |
-| `🤔 CLASSIFYING` | Running the fast turn classifier |
-| `🔊 SPEAKING` | TTS playing a response |
-| `⏱ COOLDOWN` | Waiting out the proactive speech cooldown |
-| `📚 INGESTING` | Indexing game documents |
-| `💬 ONBOARDING` | Running a setup interview |
+| `<< LISTENING` | Microphone active, waiting for speech |
+| `?? CLASSIFYING` | Running the fast turn classifier |
+| `>> SPEAKING` | TTS playing a response |
+| `\|\| COOLDOWN` | Waiting out the proactive speech cooldown |
+| `** INGESTING` | Indexing game documents |
+| `>> ONBOARDING` | Running a setup interview |
+| `~~ MEMORIZING` | Saving buffer to long-term memory (background) |
+| `!! ERROR` | An error occurred — detail shown in stats panel |
+| `[] STOPPED` | Session ended |
 
-**Hotkeys (terminal mode):**
+When memory summarisation is running in the background a second badge appears in the header: `~~ ZAPISUJE PAMIĘĆ`.
+
+**Buffer panel** border colour changes dynamically:
+- Blue — normal fill
+- Amber — fill ≥ 60 %
+- Red — fill ≥ 90 % with `AUTO-FLUSH wkrótce` warning
+
+**Hotkeys — single keypress, no Enter required:**
 
 | Key | Action |
 |---|---|
 | `f` | Force the bot to take a turn immediately |
 | `v` | Cycle to the next TTS voice |
-| `q` | Quit and save the session |
+| `q` or `Esc` | Quit and save the session |
+
+Keys respond on the keypress itself — no need to press Enter. Terminal settings are restored automatically when the session exits.
 
 ---
 
@@ -481,7 +498,11 @@ rpgplayeraai/
 
 **Bot speaks too often or not enough**
 - Re-run personality interview: delete `rpg_player/data/player_personality.json`
-- Or set `SPEAK_UP_COOLDOWN_SEC=60` in `config.py`
+- Or set `SPEAK_UP_COOLDOWN_SEC=60` in `.env`
+
+**Hotkeys not responding**
+- Hotkeys require a real terminal (not piped/redirected stdin)
+- In a piped environment the bot falls back to line-buffered mode: type the key then Enter
 
 **Re-indexing is slow**
 - Only happens when files in `data/game_files/` change
