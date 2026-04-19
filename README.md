@@ -29,21 +29,43 @@ The bot operates on **two simultaneous layers**, just like a real player:
   Mic input
      │
      ▼
-  Whisper STT ──► Rolling buffer (last 15 exchanges)
-     │
+  Whisper STT ──► Rolling buffer (context window)
+     │                    │
+     │                    ▼ (at threshold %)
+     │             MemoryManager ──► context_general.json  ←──────┐
+     │                    │         (LLM summarisation)           │
+     │                    └── flush keeping last utterance ───────┘
      ▼
   Classifier (gpt-4o-mini) ──► WAIT / MY_TURN / SPEAK_UP
-     │                              │
-     │              ┌───────────────┘
-     ▼              ▼
+     │
+     ▼
   Behavior chain ──► Injects contextual instructions
      │
      ▼
-  Agent (gpt-4o) ──► Polish response
+  Agent (gpt-4o)
+    ├─ system: character + personality + context_general (long-term memory)
+    └─ human:  context_window (recent exchanges) + now (last utterance)
      │
      ▼
-  Edge TTS ──► Spoken aloud at the table
+  Edge TTS / OpenAI TTS / Kokoro ──► Spoken aloud at the table
 ```
+
+---
+
+## ✦ Three-tier memory
+
+The bot never forgets anything that happened during a session:
+
+| Tier | Content | Lifetime |
+|---|---|---|
+| **Now** | Last single utterance — the immediate trigger | Current loop tick |
+| **Context Window** | Last N exchanges (rolling buffer) | Until flushed |
+| **Context General** | LLM-compressed history: NPCs, locations, decisions, notes | Permanent (JSON file) |
+
+When the context window reaches the **auto-flush threshold** (default 95%), the bot
+automatically summarises the buffer into `context_general.json` via `gpt-4o-mini`
+before flushing. The general memory is injected into every agent call so the bot
+always knows the full game history, regardless of how many buffer flushes have occurred.
 
 ---
 
@@ -92,28 +114,53 @@ run.bat
 > virtual environment creation, dependency installation, validation.
 > Just set your key and go.
 
-### 4 — Optional web control panel (HTML)
+### 4 — Web control panel
 
-If you prefer controlling the bot through a browser:
+Control everything from a browser instead of the terminal:
 
 ```bash
 python3 -m rpg_player.webapp
 ```
 
-Then open:
+Open `http://localhost:8080`
 
-```
-http://localhost:8080
-```
+---
 
-The panel lets you:
-- start/stop the bot process,
-- edit `character.json` and `player_personality.json`,
-- upload/delete RAG game files and trigger ingest,
-- change runtime behavior mode:
-  - `manual` — bot speaks only after `f`,
-  - `gm` — bot responds only when directly addressed,
-  - `auto` — legacy autonomous behavior.
+## ✦ Web panel
+
+The panel has five tabs:
+
+### Panel
+- **Health status row** — coloured indicators for bot / API key / character / personality / game files
+- **Buffer progress bar** — live fill level of the context window (blue → amber at 60% → red at 90%)
+- Start / Stop bot, validate setup, trigger ingest
+- **Flush buffer** button — clears the window keeping the last utterance; triggers summarisation
+
+### Konfiguracja
+- OpenAI API key (write-only, masked)
+- Response mode: `manual` / `gm` / `auto`
+- Context window size slider (5–40 exchanges)
+- **Buffer flush threshold** slider (50–100%) — auto-flush + summarise at this fill %
+- Swearing intensity, proactive speak-up, extra AI players
+- TTS backend and voice selection (Edge / OpenAI / Kokoro)
+
+### Postać
+- Live JSON editors for `character.json` and `player_personality.json`
+- Reset to defaults
+
+### Zasoby
+- Upload / delete game files (PDF, DOCX, XLSX)
+- Session history browser with per-session detail view
+- **Game log table** — sortable / filterable table (click headers to sort ↑↓; filter by event type, actor, or free text)
+
+### Pamięć
+- **Context General editor** — view and manually edit `context_general.json` (the bot's long-term memory)
+- **Context Window** — live view of what's currently in the rolling buffer
+- **Teraz (Now)** — the last utterance the bot sees as its immediate trigger
+
+### Discord
+- Token, Guild ID, channel IDs
+- Live connection status
 
 ---
 
@@ -212,6 +259,14 @@ Once the session starts, a **Rich terminal dashboard** takes over the screen:
 | `📚 INGESTING` | Indexing game documents |
 | `💬 ONBOARDING` | Running a setup interview |
 
+**Hotkeys (terminal mode):**
+
+| Key | Action |
+|---|---|
+| `f` | Force the bot to take a turn immediately |
+| `v` | Cycle to the next TTS voice |
+| `q` | Quit and save the session |
+
 ---
 
 ## ✦ Behavior system
@@ -262,40 +317,63 @@ DEFAULT_CHAIN.register(MyBehavior())
 
 Done. No other files need to change.
 
-### Building a custom chain
-
-```python
-from rpg_player.behaviors import BehaviorChain
-from rpg_player.behaviors.dice_reactions import CriticalHitBehavior
-from rpg_player.behaviors.my_behavior import MyBehavior
-
-combat_chain = (
-    BehaviorChain()
-    .register(CriticalHitBehavior())
-    .register(MyBehavior())
-)
-```
-
-Pass it to `run_agent(behavior_chain=combat_chain)` or swap `DEFAULT_CHAIN` in `main.py`.
-
 ---
 
 ## ✦ Configuration
 
-All settings live in `rpg_player/config.py`.
+All settings live in `rpg_player/config.py` and can be overridden via `.env`.
+
+### Core
 
 | Setting | Default | Description |
 |---|---|---|
 | `CLASSIFIER_MODEL` | `gpt-4o-mini` | Fast model for turn decisions |
 | `AGENT_MODEL` | `gpt-4o` | Full model for responses |
-| `WHISPER_MODEL` | `base` | STT size: `tiny` / `base` / `small` / `medium` |
-| `SILENCE_THRESHOLD_SEC` | `1.5` | Silence gap that ends an utterance |
-| `BUFFER_MAX_EXCHANGES` | `15` | Rolling context window |
-| `TTS_BACKEND` | `edge` | `"edge"` (online) or `"kokoro"` (local) |
-| `TTS_VOICE` | `pl-PL-MarekNeural` | Voice for Edge TTS |
-| `RAG_TIMEOUT_SEC` | `2.5` | Max wait for a rules lookup |
+| `RESPONSE_MODE` | `gm` | `manual` / `gm` / `auto` |
 
-**Cooldown by talk frequency** — set automatically from the personality interview:
+### STT (Whisper)
+
+| Setting | Default | Description |
+|---|---|---|
+| `WHISPER_MODEL` | `base` | `tiny` / `base` / `small` / `medium` |
+| `WHISPER_ENERGY_THRESHOLD` | `800` | Mic energy floor — raise if ambient noise triggers STT |
+| `WHISPER_INSECURE_SSL` | `0` | Set `1` on corporate VPNs with self-signed certs |
+| `SILENCE_THRESHOLD_SEC` | `1.5` | Silence gap that ends an utterance |
+
+### Memory
+
+| Setting | Default | Description |
+|---|---|---|
+| `BUFFER_MAX_EXCHANGES` | `15` | Rolling context window size |
+| `BUFFER_FLUSH_THRESHOLD` | `0.95` | Auto-flush + summarise at this fill fraction |
+| `GENERAL_CONTEXT_FILE` | `data/context_general.json` | Long-term memory file |
+
+### TTS
+
+| Setting | Default | Description |
+|---|---|---|
+| `TTS_BACKEND` | `edge` | `edge` / `openai` / `kokoro` |
+| `TTS_VOICE` | `pl-PL-MarekNeural` | Default voice |
+| `OPENAI_TTS_MODEL` | `gpt-4o-mini-tts` | Model for OpenAI TTS |
+| `OPENAI_TTS_VOICE` | `alloy` | OpenAI voice name |
+| `OPENAI_TTS_FORMAT` | `mp3` | `mp3` / `wav` / `opus` / `flac` / `pcm` |
+
+### Voices
+
+| Voice ID | Character |
+|---|---|
+| `pl-PL-MarekNeural` | Polish male (Edge, default) |
+| `pl-PL-ZofiaNeural` | Polish female (Edge) |
+| `alloy` / `verse` / `shimmer` / `echo` / `onyx` | OpenAI TTS |
+
+**Kokoro TTS (local, offline):**
+```bash
+pip install kokoro-onnx
+# Place kokoro-v0_19.onnx and voices.json in rpg_player/data/
+```
+Then set `TTS_BACKEND=kokoro` in `.env`.
+
+**Cooldown by talk frequency:**
 
 | Personality answer | Cooldown |
 |---|---|
@@ -303,29 +381,17 @@ All settings live in `rpg_player/config.py`.
 | `umiarkowanie` | 45 s |
 | `rzadko ale trafnie` | 90 s |
 
-### Voices
-
-| Voice ID | Character |
-|---|---|
-| `pl-PL-MarekNeural` | Polish male (default) |
-| `pl-PL-ZofiaNeural` | Polish female |
-
-**Kokoro TTS (local, better quality):**
-```bash
-pip install kokoro-onnx
-# Place kokoro-v0_19.onnx and voices.json in rpg_player/data/
-```
-Then set `TTS_BACKEND = "kokoro"` in `config.py`.
-
 ---
 
 ## ✦ Resetting
 
-| What to reset | Command |
-|---|---|
-| Character | `rm rpg_player/data/character.json` |
-| Personality | `rm rpg_player/data/player_personality.json` |
-| Game document index | `rm -rf rpg_player/data/chroma_db/` |
+| What to reset | CLI | Web panel |
+|---|---|---|
+| Character | `rm rpg_player/data/character.json` | Postać → Reset domyślny |
+| Personality | `rm rpg_player/data/player_personality.json` | Postać → Reset domyślny |
+| Game document index | `rm -rf rpg_player/data/chroma_db/` | Zasoby → Wyczyść Chroma DB |
+| All sessions | `rm rpg_player/data/sessions/session_*.json` | Zasoby → Usuń wszystkie |
+| General memory | `rm rpg_player/data/context_general.json` | Pamięć → Wyczyść pamięć ogólną |
 
 ---
 
@@ -333,41 +399,55 @@ Then set `TTS_BACKEND = "kokoro"` in `config.py`.
 
 ```
 rpgplayeraai/
-├── run.sh                       # macOS / Linux launcher (auto-setup)
-├── run.bat                      # Windows launcher (auto-setup)
+├── run.sh                         # macOS / Linux launcher (auto-setup)
+├── run.bat                        # Windows launcher (auto-setup)
 ├── requirements.txt
-├── .env                         # your OPENAI_API_KEY (not committed)
+├── .env                           # OPENAI_API_KEY etc. (not committed)
 └── rpg_player/
-    ├── main.py                  # entry point — startup + session loop
-    ├── config.py                # all tunable constants
+    ├── main.py                    # entry point — startup + session loop
+    ├── config.py                  # all tunable constants
+    ├── webapp.py                  # Flask web control panel
     │
-    ├── behaviors/               # ✦ pluggable behavior system
-    │   ├── __init__.py          #   BehaviorChain + DEFAULT_CHAIN
-    │   ├── base.py              #   Behavior ABC + BehaviorContext
-    │   ├── dice_reactions.py    #   crit hit / fail / good roll
-    │   ├── plot_reactions.py    #   plot twist / emotional scene
-    │   ├── uncertainty.py       #   rules uncertainty framing
-    │   ├── group_dynamics.py    #   group debate participation
-    │   └── silence_filler.py    #   break DM silence
+    ├── behaviors/                 # ✦ pluggable behavior system
+    │   ├── __init__.py            #   BehaviorChain + DEFAULT_CHAIN
+    │   ├── base.py                #   Behavior ABC + BehaviorContext
+    │   ├── dice_reactions.py      #   crit hit / fail / good roll
+    │   ├── plot_reactions.py      #   plot twist / emotional scene
+    │   ├── uncertainty.py         #   rules uncertainty framing
+    │   ├── group_dynamics.py      #   group debate participation
+    │   └── silence_filler.py      #   break DM silence
     │
     ├── onboarding/
-    │   ├── file_ingest.py       # parse docs → Chroma RAG index
-    │   ├── character_loader.py  # load character.json
-    │   ├── character_creator.py # voice interview → character sheet
+    │   ├── file_ingest.py         #   parse docs → Chroma RAG index
+    │   ├── character_loader.py
+    │   ├── character_creator.py   #   voice interview → character sheet
     │   ├── personality_loader.py
     │   └── personality_creator.py
     │
     ├── session/
-    │   ├── listener.py          # Whisper STT + rolling buffer
-    │   ├── classifier.py        # fast LLM: WAIT / MY_TURN / SPEAK_UP
-    │   ├── agent.py             # LangChain two-layer agent
-    │   └── rag.py               # human-paced async RAG lookup
+    │   ├── listener.py            #   Whisper STT + rolling buffer
+    │   ├── classifier.py          #   fast LLM: WAIT / MY_TURN / SPEAK_UP
+    │   ├── agent.py               #   LangChain two-layer agent (3-tier memory)
+    │   ├── memory_manager.py      #   context_general: LLM summarisation + persistence
+    │   ├── game_log.py            #   structured JSONL session log
+    │   ├── session_memory.py      #   between-session persistence
+    │   ├── speaker_registry.py    #   player name detection + registry
+    │   └── token_tracker.py       #   token usage warnings
     │
     ├── tts/
-    │   └── speaker.py           # Edge TTS / Kokoro abstraction
+    │   └── speaker.py             #   Edge TTS / OpenAI TTS / Kokoro abstraction
     │
-    └── ui/
-        └── dashboard.py         # Rich live terminal dashboard
+    ├── integrations/
+    │   └── discord_connector.py   #   optional Discord bridge
+    │
+    ├── ui/
+    │   └── dashboard.py           #   Rich live terminal dashboard
+    │
+    └── web/
+        ├── templates/index.html   #   single-page control panel
+        └── static/
+            ├── app.js
+            └── styles.css
 ```
 
 ---
@@ -378,19 +458,30 @@ rpgplayeraai/
 - Check system audio output is not muted
 - Confirm `edge-tts` installed: `pip install edge-tts`
 - Edge TTS requires internet — check connectivity
+- For OpenAI TTS: verify `OPENAI_API_KEY` and `TTS_BACKEND=openai` in `.env`
 
-**Whisper doesn't transcribe**
+**Whisper doesn't transcribe / transcribes garbage**
 - Confirm `ffmpeg` installed and on PATH: `ffmpeg -version`
-- Try a larger model: `WHISPER_MODEL = "small"` in `config.py`
+- Try a larger model: `WHISPER_MODEL=small` in `.env`
 - Check your microphone is the system default input
+- Raise the energy threshold: `WHISPER_ENERGY_THRESHOLD=1200` in `.env` (filters ambient noise)
+
+**Whisper model download fails (SSL error)**
+- Set `WHISPER_INSECURE_SSL=1` in `.env` (bypasses certificate verification on corporate VPNs)
+- Or download the model manually to `~/.cache/whisper/`
+
+**Bot stopped responding / stuck in WAIT**
+- Click **Przepłucz bufor** in the web panel to clear accumulated noise from the buffer
+- Check the context window in the **Pamięć** tab — garbage STT entries will be visible
+- Increase `WHISPER_ENERGY_THRESHOLD` to reduce noise pickup
 
 **OpenAI errors / rate limits**
 - Verify `OPENAI_API_KEY` is set and has credits
-- For testing, set `AGENT_MODEL = "gpt-4o-mini"` to reduce cost
+- For testing, set `AGENT_MODEL=gpt-4o-mini` in `.env` to reduce cost
 
 **Bot speaks too often or not enough**
-- Re-run personality interview: `rm rpg_player/data/player_personality.json`
-- Or override directly: `SPEAK_UP_COOLDOWN_SEC = 60` in `config.py`
+- Re-run personality interview: delete `rpg_player/data/player_personality.json`
+- Or set `SPEAK_UP_COOLDOWN_SEC=60` in `config.py`
 
 **Re-indexing is slow**
 - Only happens when files in `data/game_files/` change
@@ -398,7 +489,7 @@ rpgplayeraai/
 
 **Kokoro model not found**
 - Download `kokoro-v0_19.onnx` + `voices.json` → place in `rpg_player/data/`
-- Or switch back: `TTS_BACKEND = "edge"`
+- Or switch back: `TTS_BACKEND=edge`
 
 ---
 
