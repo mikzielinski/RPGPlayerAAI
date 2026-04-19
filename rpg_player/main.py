@@ -400,7 +400,11 @@ def _process_bot_turn(
     if response:
         dash.update(status="SPEAKING", last_response=response)
         dash.log(f"{char_name}: {response[:80]}{'...' if len(response) > 80 else ''}")
-        if not config.DISCORD_TEXT_ONLY:
+        if config.DISCORD_TEXT_ONLY:
+            pass  # text-only mode — no TTS
+        elif discord_connector and discord_connector.has_voice:
+            discord_connector.speak_in_voice_channel(response)
+        else:
             tts.speak(response)
         listener.add_bot_turn(response)
         if game_log:
@@ -584,15 +588,20 @@ def main() -> None:
 
     # 6. Start listener and session
     listener = Listener(char_name=char_name, registry=registry)
-    # Discord text-only mode: mute mic permanently (no audio I/O needed)
-    if config.DISCORD_TEXT_ONLY:
+    if config.DISCORD_ENABLED and not config.DISCORD_TEXT_ONLY:
+        # Full Discord voice mode: pass Whisper model to connector for voice RX,
+        # mute local mic (all audio I/O goes through Discord).
+        discord_connector.attach_whisper_model(listener.model)
+        listener.mute()
+    elif config.DISCORD_TEXT_ONLY:
         listener.mute()
     elif Path(config.MIC_MUTE_FLAG).exists():
-        # Apply saved mic-mute state before starting (persists across restarts)
         listener.mute()
     listener.start()
 
-    if not config.DISCORD_TEXT_ONLY:
+    if config.DISCORD_TEXT_ONLY or (config.DISCORD_ENABLED and not config.DISCORD_TEXT_ONLY):
+        pass  # Discord modes: skip startup TTS (bot announces itself on Discord)
+    else:
         tts.speak(f"Gotowy. Jestem {char_name}. Zaczynamy sesje.")
     dash.update(status="LISTENING")
     mic_mode = "CZAT" if listener.is_muted() else "GŁOS"

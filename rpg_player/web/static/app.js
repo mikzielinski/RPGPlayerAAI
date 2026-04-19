@@ -352,7 +352,18 @@ function setBotLogs(lines) {
 }
 
 function setDiscordStatus(payload) {
-  document.getElementById("discordStatusView").textContent = JSON.stringify(payload || {}, null, 2);
+  const d = payload || {};
+  const lines = [
+    `connected:     ${d.connected ?? false}`,
+    `guild:         ${d.guild || "—"}`,
+    `text_channel:  ${d.text_channel || "—"}`,
+    `voice_channel: ${d.voice_channel || "—"}`,
+    `voice_rx:      ${d.voice_rx ?? false}   ← słucha graczy przez Discord`,
+    `voice_tx:      ${d.voice_tx ?? false}   ← mówi na kanale głosowym`,
+    `known_users:   ${(d.known_users || []).join(", ") || "—"}`,
+    `last_error:    ${d.last_error || "—"}`,
+  ];
+  document.getElementById("discordStatusView").textContent = lines.join("\n");
 }
 
 // ── State refresh ────────────────────────────────────────────────────

@@ -18,4 +18,5 @@ pypdf
 unstructured[xlsx]
 pydantic
 rich
-discord.py
+discord.py[voice]
+discord-ext-voice-recv

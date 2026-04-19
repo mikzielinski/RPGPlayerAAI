@@ -124,6 +124,11 @@ class Listener:
     def is_muted(self) -> bool:
         return self._muted
 
+    @property
+    def model(self):
+        """Expose loaded Whisper model for reuse (e.g. Discord voice RX)."""
+        return self._model
+
     def get_buffer(self) -> list[dict]:
         with self._lock:
             return list(self._buffer)
