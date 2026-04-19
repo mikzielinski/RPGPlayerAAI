@@ -620,6 +620,12 @@ def main() -> None:
                 for p in all_players:
                     p._last_wait_hash = ""
 
+            # Discord: inject incoming text-channel messages into buffer
+            if discord_connector and discord_connector.enabled:
+                for dmsg in discord_connector.pop_pending_messages():
+                    listener.inject_text(dmsg["text"], dmsg["speaker"])
+                    dash.log(f"[blue][discord] {dmsg['speaker']}: {dmsg['text']}[/blue]")
+
             # Chat-mode: inject typed messages from web panel
             chat_queue_path = Path(config.CHAT_QUEUE_FILE)
             if chat_queue_path.exists():

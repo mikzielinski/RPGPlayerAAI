@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -51,6 +52,7 @@ class DiscordConnector:
 
         self._state = DiscordState(enabled=bool(self._enabled and self._token))
         self._lock = threading.Lock()
+        self._pending: deque[dict] = deque()
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
 
@@ -230,6 +232,7 @@ class DiscordConnector:
                     if detected:
                         speaker = detected
                 connector._remember_known_user(speaker)
+                connector._queue_for_inject(speaker, content)
 
             async def on_voice_state_update(self, member, before, after):
                 if member.bot:
@@ -255,6 +258,18 @@ class DiscordConnector:
                 pass
             with self._lock:
                 self._state.connected = False
+
+    def _queue_for_inject(self, speaker: str, text: str) -> None:
+        """Push an incoming Discord message to the pending buffer for main-loop injection."""
+        with self._lock:
+            self._pending.append({"speaker": speaker, "text": text})
+
+    def pop_pending_messages(self) -> list[dict]:
+        """Return all queued Discord messages and clear the queue."""
+        with self._lock:
+            msgs = list(self._pending)
+            self._pending.clear()
+            return msgs
 
     def _remember_known_user(self, name: str) -> None:
         cleaned = (name or "").strip()
