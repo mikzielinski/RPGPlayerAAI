@@ -553,3 +553,15 @@ body {
   font-size: 0.82rem; color: var(--text-2); white-space: pre-wrap;
   word-break: break-word; margin: 0; max-height: 120px; overflow-y: auto;
 }
+
+/* JSON editor validation */
+.json-editor.json-invalid { border-color: var(--danger) !important; }
+.json-error {
+  color: var(--danger); font-size: 0.8rem; padding: 4px 6px;
+  background: rgba(239,68,68,.08); border-radius: var(--radius-sm); margin-top: 4px;
+}
+.json-error.hidden { display: none; }
+
+/* Activity badge extra states */
+.badge-speaking { background: rgba(168,85,247,.15); color: #c084fc; border-color: #c084fc; }
+.badge-classifying { background: rgba(234,179,8,.15); color: #facc15; border-color: #facc15; }

@@ -674,6 +674,15 @@ def main() -> None:
 
             # Force key only applies to primary player
             force = input_handler.consume_force()
+            # Force turn requested from web panel
+            web_force_flag = Path(config.FORCE_TURN_FLAG)
+            if web_force_flag.exists():
+                try:
+                    web_force_flag.unlink()
+                except OSError:
+                    pass
+                force = True
+                dash.log("[yellow]Wymuszona odpowiedź z panelu webowego.[/yellow]")
 
             for i, player in enumerate(all_players):
                 _process_bot_turn(

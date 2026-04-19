@@ -290,6 +290,7 @@ def _system_status(process_manager: BotProcessManager) -> dict[str, Any]:
             "swearing_intensity": env_file.get("SWEARING_INTENSITY", config.SWEARING_INTENSITY),
             "game_files_confirmed": env_file.get("GAME_FILES_CONFIRMED", "0"),
             "response_mode": response_mode,
+            "whisper_language": env_file.get("WHISPER_LANGUAGE", config.WHISPER_LANGUAGE),
             "whisper_insecure_ssl": _env_bool(env_file.get("WHISPER_INSECURE_SSL"), config.WHISPER_INSECURE_SSL),
             "allow_proactive_speak_up": allow_speak_up,
             "enable_additional_ai_players": additional_players_enabled,
@@ -432,6 +433,7 @@ def create_app() -> Flask:
     def api_save_env():
         payload = request.get_json(silent=True) or {}
         key = payload.get("openai_api_key")
+        whisper_language = payload.get("whisper_language")
         whisper_ssl = payload.get("whisper_insecure_ssl")
         swearing = payload.get("swearing_intensity")
         response_mode = payload.get("response_mode")
@@ -455,6 +457,10 @@ def create_app() -> Flask:
         if key is not None:
             key = str(key).strip()
             updates["OPENAI_API_KEY"] = key if key else None
+
+        if whisper_language is not None:
+            lang = str(whisper_language).strip().lower()
+            updates["WHISPER_LANGUAGE"] = lang if lang else "pl"
 
         if swearing is not None:
             swearing = str(swearing).strip().lower()
@@ -622,6 +628,32 @@ def create_app() -> Flask:
     def api_bot_stop():
         ok, message = manager.stop()
         return jsonify({"ok": ok, "message": message}), (200 if ok else 409)
+
+    @app.post("/api/bot/force")
+    def api_bot_force():
+        flag_path = Path(config.FORCE_TURN_FLAG)
+        flag_path.parent.mkdir(parents=True, exist_ok=True)
+        flag_path.touch()
+        return jsonify({"ok": True, "message": "Sygnał wymuszonej odpowiedzi wysłany."})
+
+    @app.get("/api/bot/activity")
+    def api_bot_activity():
+        game_logs = GameLog.list_logs()
+        if not game_logs:
+            return jsonify({"status": "unknown", "detail": "", "actor": "", "event": ""})
+        tail = GameLog.tail(game_logs[0], limit=8)
+        for entry in reversed(tail):
+            p = entry.get("payload", {})
+            status = p.get("status", "")
+            if status and status not in ("", "unknown"):
+                return jsonify({
+                    "status": status,
+                    "detail": p.get("detail", ""),
+                    "actor": p.get("actor", ""),
+                    "event": p.get("event", entry.get("type", "")),
+                    "ts": entry.get("timestamp", ""),
+                })
+        return jsonify({"status": "unknown", "detail": "", "actor": "", "event": ""})
 
     @app.get("/api/memory")
     def api_get_memory():

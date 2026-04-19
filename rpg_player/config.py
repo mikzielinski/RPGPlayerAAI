@@ -34,7 +34,7 @@ OPENAI_TTS_EMOTION_SPEED = {
 # STT
 WHISPER_MODEL = "base"  # or "small" for better accuracy
 SILENCE_THRESHOLD_SEC = 1.5
-WHISPER_LANGUAGE = "pl"
+WHISPER_LANGUAGE = os.environ.get("WHISPER_LANGUAGE", "pl").strip().lower() or "pl"
 WHISPER_ENERGY_THRESHOLD = int(os.environ.get("WHISPER_ENERGY_THRESHOLD", "800"))
 WHISPER_INSECURE_SSL = os.environ.get("WHISPER_INSECURE_SSL", "0").strip().lower() in {
     "1",
@@ -61,6 +61,7 @@ BUFFER_MAX_EXCHANGES_LIMIT = 40
 
 # Flag file written by the web panel to request a buffer flush from the running bot.
 BUFFER_FLUSH_FLAG = os.path.join(_DATA_DIR, ".flush_buffer_request")
+FORCE_TURN_FLAG = os.path.join(_DATA_DIR, ".force_turn_request")
 
 # Auto-flush the context window when fill reaches this fraction (0.0–1.0).
 # Before flushing, the window is summarised into context_general asynchronously.

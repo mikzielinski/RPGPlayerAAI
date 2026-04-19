@@ -60,10 +60,19 @@
           </div>
           <div class="actions mt-2">
             <button id="flushBufferBtn" class="btn btn-warning">⟳ Przepłucz bufor</button>
+            <button id="forceTurnBtn" class="btn btn-warning">⚡ Wymuś odpowiedź</button>
             <a href="/api/debug-dump" class="btn btn-secondary" download>↓ Debug dump</a>
           </div>
-          <p class="help-text">Czyści bufor rozmowy, zachowując ostatnią wypowiedź. Debug dump pobiera pełny JSON z logami, stanem bota i konfiguracją.</p>
+          <p class="help-text">Przepłukanie czyści bufor zachowując ostatnią wypowiedź. Wymuszenie każe botowi odpowiedzieć na obecny kontekst.</p>
           <pre id="commandOutput" class="console mt-2"></pre>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <h2>Aktywność bota</h2>
+            <div id="activityBadge" class="badge badge-off">—</div>
+          </div>
+          <div id="activityDetail" class="help-text mt-1" style="min-height:1.4em"></div>
         </section>
 
         <section class="card">
@@ -126,6 +135,23 @@
               <option value="moderate">moderate — umiarkowane</option>
               <option value="heavy">heavy — mocne</option>
             </select>
+          </div>
+
+          <div class="form-row">
+            <label for="whisperLanguage">Język rozpoznawania mowy (WHISPER_LANGUAGE)</label>
+            <select id="whisperLanguage">
+              <option value="pl">pl — Polski</option>
+              <option value="en">en — English</option>
+              <option value="de">de — Deutsch</option>
+              <option value="fr">fr — Français</option>
+              <option value="es">es — Español</option>
+              <option value="it">it — Italiano</option>
+              <option value="ru">ru — Русский</option>
+              <option value="cs">cs — Čeština</option>
+              <option value="uk">uk — Українська</option>
+              <option value="ja">ja — 日本語</option>
+            </select>
+            <p class="help-text">Wymusza język transkrypcji Whisper. Wypowiedzi w innych językach są ignorowane lub przekształcone siłą.</p>
           </div>
 
           <div class="form-row checkbox-row">
@@ -227,21 +253,25 @@
 
         <section class="card">
           <div class="card-header"><h2>Karta postaci (character.json)</h2></div>
-          <textarea id="characterJson" class="json-editor"></textarea>
+          <textarea id="characterJson" class="json-editor" spellcheck="false"></textarea>
+          <div id="characterJsonError" class="json-error hidden"></div>
           <div class="actions mt-2">
             <button id="loadCharacterBtn" class="btn">Wczytaj</button>
             <button id="saveCharacterBtn" class="btn btn-primary">Zapisz</button>
-            <button data-reset="character" class="btn btn-danger resetBtn">Reset domyślny</button>
+            <button data-format-json="characterJson" class="btn btn-sm">{ } Formatuj</button>
+            <button data-reset="character" class="btn btn-danger resetBtn">Reset</button>
           </div>
         </section>
 
         <section class="card">
           <div class="card-header"><h2>Osobowość (player_personality.json)</h2></div>
-          <textarea id="personalityJson" class="json-editor"></textarea>
+          <textarea id="personalityJson" class="json-editor" spellcheck="false"></textarea>
+          <div id="personalityJsonError" class="json-error hidden"></div>
           <div class="actions mt-2">
             <button id="loadPersonalityBtn" class="btn">Wczytaj</button>
             <button id="savePersonalityBtn" class="btn btn-primary">Zapisz</button>
-            <button data-reset="personality" class="btn btn-danger resetBtn">Reset domyślny</button>
+            <button data-format-json="personalityJson" class="btn btn-sm">{ } Formatuj</button>
+            <button data-reset="personality" class="btn btn-danger resetBtn">Reset</button>
           </div>
         </section>
 
@@ -331,8 +361,10 @@
             <strong>Pamięć ogólna</strong> (ten plik — skompresowane podsumowanie całej sesji, nigdy nie ginie).
             Gdy bufor osiągnie próg auto-flush, LLM automatycznie aktualizuje ten plik przed wyczyszczeniem buforu.
           </p>
-          <textarea id="memoryJson" class="json-editor" style="min-height:420px"></textarea>
+          <textarea id="memoryJson" class="json-editor" style="min-height:420px" spellcheck="false"></textarea>
+          <div id="memoryJsonError" class="json-error hidden"></div>
           <div class="actions mt-2">
+            <button data-format-json="memoryJson" class="btn btn-sm">{ } Formatuj</button>
             <button id="resetMemoryBtn" class="btn btn-danger btn-sm">Wyczyść pamięć ogólną</button>
           </div>
         </section>

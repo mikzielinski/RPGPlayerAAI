@@ -1,6 +1,9 @@
 const state = {
   lastStatus: null,
   envFormDirty: false,
+  charDirty: false,
+  persDirty: false,
+  memDirty: false,
   gameLogs: [],
   gameLogSort: { col: "timestamp", dir: "desc" },
   gameLogFilter: { text: "", event: "!wait", actor: "" },
@@ -366,6 +369,7 @@ async function refreshState() {
 
   if (!state.envFormDirty) {
     const env = status.env || {};
+    _setVal("whisperLanguage", env.whisper_language || "pl");
     _setVal("swearingIntensity", env.swearing_intensity || "off");
     _setVal("responseMode", env.response_mode || "gm");
     _setChecked("whisperInsecureSsl", !!env.whisper_insecure_ssl);
@@ -403,6 +407,9 @@ function _setChecked(id, checked) {
 async function loadMemory() {
   const res = await requestJson("/api/memory");
   document.getElementById("memoryJson").value = JSON.stringify(res.data || {}, null, 2);
+  state.memDirty = false;
+  const err = document.getElementById("memoryJsonError");
+  if (err) err.classList.add("hidden");
   const badge = document.getElementById("memoryStatusBadge");
   if (badge) {
     const d = res.data || {};
@@ -417,6 +424,7 @@ async function saveMemory() {
   let data = {};
   try { if (raw) data = JSON.parse(raw); } catch (e) { showToast(`Błąd JSON: ${e.message}`, true); return; }
   const res = await requestJson("/api/memory", { method: "POST", body: JSON.stringify({ data }) });
+  state.memDirty = false;
   showToast(res.message || "Pamięć zapisana");
 }
 
@@ -454,11 +462,21 @@ function renderNowView(buffer) {
 async function loadCharacter() {
   const res = await requestJson("/api/character");
   document.getElementById("characterJson").value = JSON.stringify(res.data || {}, null, 2);
+  state.charDirty = false;
+  const el = document.getElementById("characterJson");
+  if (el) { el.classList.remove("json-invalid"); }
+  const err = document.getElementById("characterJsonError");
+  if (err) err.classList.add("hidden");
 }
 
 async function loadPersonality() {
   const res = await requestJson("/api/personality");
   document.getElementById("personalityJson").value = JSON.stringify(res.data || {}, null, 2);
+  state.persDirty = false;
+  const el = document.getElementById("personalityJson");
+  if (el) { el.classList.remove("json-invalid"); }
+  const err = document.getElementById("personalityJsonError");
+  if (err) err.classList.add("hidden");
 }
 
 async function loadGameFiles() {
@@ -494,6 +512,7 @@ function _collectEnvPayload() {
   const threshSlider = document.getElementById("bufferFlushThreshold");
   const threshVal = threshSlider ? (parseInt(threshSlider.value, 10) / 100) : 0.95;
   return {
+    whisper_language: document.getElementById("whisperLanguage")?.value || "pl",
     whisper_insecure_ssl: document.getElementById("whisperInsecureSsl").checked,
     swearing_intensity: document.getElementById("swearingIntensity").value,
     response_mode: document.getElementById("responseMode").value,
@@ -597,6 +616,107 @@ async function loadSessionDetails(file) {
 }
 
 // ── Wire events ───────────────────────────────────────────────────────
+// ── Force turn ───────────────────────────────────────────────────────
+async function forceTurn() {
+  const res = await requestJson("/api/bot/force", { method: "POST" });
+  showToast(res.message || "Sygnał wysłany");
+}
+
+// ── Activity monitor ─────────────────────────────────────────────────
+const _ACTIVITY_LABELS = {
+  LISTENING: "Słucha",
+  SPEAKING: "Mówi",
+  CLASSIFYING: "Klasyfikuje",
+  COOLDOWN: "Cooldown",
+  MEMORIZING: "Zapamiętuje",
+  ERROR: "Błąd",
+  STOPPED: "Zatrzymany",
+};
+const _ACTIVITY_CLASS = {
+  LISTENING: "badge-on",
+  SPEAKING: "badge-speaking",
+  CLASSIFYING: "badge-classifying",
+  MEMORIZING: "badge-classifying",
+  COOLDOWN: "badge-off",
+  ERROR: "badge-off",
+  STOPPED: "badge-off",
+};
+
+async function refreshActivity() {
+  try {
+    const data = await requestJson("/api/bot/activity");
+    const badge = document.getElementById("activityBadge");
+    const detail = document.getElementById("activityDetail");
+    if (!badge) return;
+    const s = (data.status || "unknown").toUpperCase();
+    badge.textContent = _ACTIVITY_LABELS[s] || s;
+    badge.className = `badge ${_ACTIVITY_CLASS[s] || "badge-off"}`;
+    if (detail) {
+      const parts = [];
+      if (data.actor) parts.push(data.actor);
+      if (data.detail) parts.push(data.detail);
+      detail.textContent = parts.join(" — ");
+    }
+  } catch (_) {}
+}
+
+// ── JSON editor helpers ───────────────────────────────────────────────
+function formatJson(editorId) {
+  const el = document.getElementById(editorId);
+  const errEl = document.getElementById(`${editorId}Error`);
+  if (!el) return;
+  try {
+    const parsed = JSON.parse(el.value);
+    el.value = JSON.stringify(parsed, null, 2);
+    el.classList.remove("json-invalid");
+    if (errEl) errEl.classList.add("hidden");
+  } catch (e) {
+    el.classList.add("json-invalid");
+    if (errEl) { errEl.textContent = `JSON error: ${e.message}`; errEl.classList.remove("hidden"); }
+  }
+}
+
+function validateJsonEditor(editorId) {
+  const el = document.getElementById(editorId);
+  const errEl = document.getElementById(`${editorId}Error`);
+  if (!el || !el.value.trim()) return;
+  try {
+    JSON.parse(el.value);
+    el.classList.remove("json-invalid");
+    if (errEl) errEl.classList.add("hidden");
+  } catch (e) {
+    el.classList.add("json-invalid");
+    if (errEl) { errEl.textContent = `JSON error: ${e.message}`; errEl.classList.remove("hidden"); }
+  }
+}
+
+// ── Auto-reload JSON editors (if not dirty) ──────────────────────────
+async function _autoReloadChar() {
+  if (state.charDirty) return;
+  const res = await requestJson("/api/character");
+  const el = document.getElementById("characterJson");
+  if (el) el.value = JSON.stringify(res.data || {}, null, 2);
+}
+async function _autoReloadPers() {
+  if (state.persDirty) return;
+  const res = await requestJson("/api/personality");
+  const el = document.getElementById("personalityJson");
+  if (el) el.value = JSON.stringify(res.data || {}, null, 2);
+}
+async function _autoReloadMem() {
+  if (state.memDirty) return;
+  const res = await requestJson("/api/memory");
+  const el = document.getElementById("memoryJson");
+  if (el) el.value = JSON.stringify(res.data || {}, null, 2);
+  const badge = document.getElementById("memoryStatusBadge");
+  if (badge) {
+    const d = res.data || {};
+    const hasContent = Object.values(d).some((v) => (Array.isArray(v) ? v.length : v && typeof v === "object" ? Object.keys(v).length : false));
+    badge.textContent = hasContent ? "Aktywna" : "Pusta";
+    badge.className = `badge ${hasContent ? "badge-on" : "badge-off"}`;
+  }
+}
+
 // ── Secrets ──────────────────────────────────────────────────────────
 async function loadSecrets() {
   const el = document.getElementById("secretsList");
@@ -679,8 +799,9 @@ async function uploadSecretFile() {
 function wireEvents() {
   const markDirty = () => { state.envFormDirty = true; };
   [
-    "whisperInsecureSsl", "swearingIntensity", "responseMode", "allowSpeakUp", "enableExtraPlayers",
-    "ttsBackend", "ttsVoice", "openaiTtsModel", "openaiTtsVoice", "openaiTtsFormat", "openaiKey",
+    "whisperLanguage", "whisperInsecureSsl", "swearingIntensity", "responseMode", "allowSpeakUp",
+    "enableExtraPlayers", "ttsBackend", "ttsVoice", "openaiTtsModel", "openaiTtsVoice",
+    "openaiTtsFormat", "openaiKey",
   ].forEach((id) => {
     const el = document.getElementById(id);
     if (el) { el.addEventListener("change", markDirty); el.addEventListener("input", markDirty); }
@@ -693,6 +814,7 @@ function wireEvents() {
   document.getElementById("startBotBtn").addEventListener("click", startBot);
   document.getElementById("stopBotBtn").addEventListener("click", stopBot);
   document.getElementById("flushBufferBtn").addEventListener("click", flushBuffer);
+  document.getElementById("forceTurnBtn")?.addEventListener("click", forceTurn);
   document.getElementById("validateBtn").addEventListener("click", validateSetup);
   document.getElementById("ingestBtn").addEventListener("click", ingestFiles);
   document.getElementById("saveEnvBtn").addEventListener("click", saveEnv);
@@ -719,14 +841,32 @@ function wireEvents() {
 
   document.getElementById("loadCharacterBtn").addEventListener("click", loadCharacter);
   document.getElementById("saveCharacterBtn").addEventListener("click", async () => {
-    try { await saveJsonFromEditor("characterJson", "/api/character"); await refreshState(); }
+    try { await saveJsonFromEditor("characterJson", "/api/character"); state.charDirty = false; await refreshState(); }
     catch (err) { showToast(`Błąd JSON: ${err.message}`, true); }
+  });
+  document.getElementById("characterJson")?.addEventListener("input", () => {
+    state.charDirty = true;
+    validateJsonEditor("characterJson");
   });
 
   document.getElementById("loadPersonalityBtn").addEventListener("click", loadPersonality);
   document.getElementById("savePersonalityBtn").addEventListener("click", async () => {
-    try { await saveJsonFromEditor("personalityJson", "/api/personality"); await refreshState(); }
+    try { await saveJsonFromEditor("personalityJson", "/api/personality"); state.persDirty = false; await refreshState(); }
     catch (err) { showToast(`Błąd JSON: ${err.message}`, true); }
+  });
+  document.getElementById("personalityJson")?.addEventListener("input", () => {
+    state.persDirty = true;
+    validateJsonEditor("personalityJson");
+  });
+
+  document.getElementById("memoryJson")?.addEventListener("input", () => {
+    state.memDirty = true;
+    validateJsonEditor("memoryJson");
+  });
+
+  document.body.addEventListener("click", (e) => {
+    const formatTarget = e.target.getAttribute?.("data-format-json");
+    if (formatTarget) { formatJson(formatTarget); return; }
   });
 
   document.body.addEventListener("click", async (ev) => {
@@ -777,13 +917,20 @@ async function bootstrap() {
   await Promise.all([
     refreshState(), loadCharacter(), loadPersonality(),
     loadGameFiles(), loadSessions(), loadGameLog(), loadDiscordStatus(), loadMemory(), loadSecrets(),
+    refreshActivity(),
   ]);
   setInterval(async () => {
     await refreshState();
     await loadGameLog();
     await loadDiscordStatus();
-    await loadMemory();
+    await _autoReloadMem();
+    await _autoReloadChar();
+    await _autoReloadPers();
+    await loadSecrets();
+    await loadGameFiles();
   }, 4000);
+
+  setInterval(refreshActivity, 2000);
 }
 
 bootstrap().catch((err) => showToast(`Błąd inicjalizacji: ${err.message}`, true));
