@@ -12,7 +12,10 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, jsonify, render_template, request
+import datetime
+import platform
+
+from flask import Flask, jsonify, render_template, request, Response
 
 from rpg_player import config
 from rpg_player.integrations.discord_connector import DiscordConnector
@@ -635,6 +638,75 @@ def create_app() -> Flask:
         flag_path.parent.mkdir(parents=True, exist_ok=True)
         flag_path.touch()
         return jsonify({"ok": True, "message": "Sygnał przepłukania buforu wysłany."})
+
+    @app.get("/api/debug-dump")
+    def api_debug_dump():
+        env_file = _load_env_file()
+
+        def _sanitize(d: dict) -> dict:
+            out = {}
+            for k, v in d.items():
+                if "key" in k.lower() or "token" in k.lower() or "secret" in k.lower():
+                    out[k] = "***" if v else ""
+                else:
+                    out[k] = v
+            return out
+
+        char_data, char_err = _safe_read_json(CHARACTER_PATH)
+        pers_data, pers_err = _safe_read_json(PERSONALITY_PATH)
+        mem_data, mem_err = _safe_read_json(GENERAL_CONTEXT_PATH)
+
+        game_logs = GameLog.list_logs()
+        game_log_entries: list = []
+        if game_logs:
+            game_log_entries = GameLog.tail(game_logs[0], limit=500)
+
+        snap = manager.snapshot()
+
+        dump = {
+            "generated_at": datetime.datetime.utcnow().isoformat() + "Z",
+            "python_version": sys.version,
+            "platform": platform.platform(),
+            "bot_process": {
+                "running": snap["running"],
+                "pid": snap["pid"],
+                "log_tail": snap["logs"][-200:],
+            },
+            "env_file": _sanitize(env_file),
+            "character": {"data": char_data, "error": char_err, "exists": CHARACTER_PATH.exists()},
+            "personality": {"data": pers_data, "error": pers_err, "exists": PERSONALITY_PATH.exists()},
+            "context_general": {"data": mem_data, "error": mem_err, "exists": GENERAL_CONTEXT_PATH.exists()},
+            "game_log": {
+                "file": str(game_logs[0]) if game_logs else None,
+                "entries": game_log_entries,
+                "total_files": len(game_logs),
+            },
+            "sessions": SessionMemory().list_sessions()[:10],
+            "game_files": _list_game_files(),
+            "config_snapshot": {
+                "WHISPER_MODEL": config.WHISPER_MODEL,
+                "WHISPER_ENERGY_THRESHOLD": config.WHISPER_ENERGY_THRESHOLD,
+                "WHISPER_INSECURE_SSL": config.WHISPER_INSECURE_SSL,
+                "SILENCE_THRESHOLD_SEC": config.SILENCE_THRESHOLD_SEC,
+                "BUFFER_MAX_EXCHANGES": config.BUFFER_MAX_EXCHANGES,
+                "BUFFER_FLUSH_THRESHOLD": config.BUFFER_FLUSH_THRESHOLD,
+                "RESPONSE_MODE": config.RESPONSE_MODE,
+                "TTS_BACKEND": config.TTS_BACKEND,
+                "TTS_VOICE": config.TTS_VOICE,
+                "GAME_LOG_ENABLED": config.GAME_LOG_ENABLED,
+                "DISCORD_ENABLED": config.DISCORD_ENABLED,
+                "AGENT_MODEL": config.AGENT_MODEL,
+                "CLASSIFIER_MODEL": config.CLASSIFIER_MODEL,
+            },
+        }
+
+        ts = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        raw = json.dumps(dump, ensure_ascii=False, indent=2, default=str)
+        return Response(
+            raw,
+            mimetype="application/json",
+            headers={"Content-Disposition": f'attachment; filename="rpg_debug_{ts}.json"'},
+        )
 
     return app
 

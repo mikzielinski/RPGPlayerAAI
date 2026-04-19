@@ -193,6 +193,8 @@ body {
 
 .btn-warning { background: #9a6800; border-color: #c9941a; }
 .btn-warning:hover { background: #c9941a; }
+.btn-secondary { background: #2a3a4a; border-color: #4a6a8a; color: #9ac; text-decoration: none; }
+.btn-secondary:hover { background: #3a4a5a; }
 
 .btn-ghost { background: transparent; border-color: transparent; color: var(--text-2); }
 .btn-ghost:hover { background: var(--surface-2); color: var(--text); border-color: var(--border); }
