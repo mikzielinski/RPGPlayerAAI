@@ -92,7 +92,7 @@ def ingest_game_files(
         all_docs.extend(docs)
         new_cache[str(file_path)] = file_path.stat().st_mtime
 
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     chunks = splitter.split_documents(all_docs)
 
     chroma_path.mkdir(parents=True, exist_ok=True)

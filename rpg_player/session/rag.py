@@ -25,24 +25,26 @@ async def human_lookup(
     vectorstore,
     tts,
     char_class: str,
-    timeout: float = 2.5,
+    timeout: float = 5.0,
 ) -> Optional[str]:
-    """RAG lookup that sounds human: speaks filler first, then retrieves.
+    """RAG lookup that sounds human: speaks filler first (if TTS available), then retrieves.
 
-    Returns page content of the best match, or None on timeout / no results.
+    Returns concatenated page content of top matches, or None on timeout / no results.
     """
-    filler = random.choice(FILLERS_PL).replace("{char_class}", char_class)
-    await tts.speak_async(filler)
+    if tts is not None:
+        filler = random.choice(FILLERS_PL).replace("{char_class}", char_class)
+        await tts.speak_async(filler)
 
     try:
         results = await asyncio.wait_for(
-            vectorstore.asimilarity_search(query, k=2),
+            vectorstore.asimilarity_search(query, k=4),
             timeout=timeout,
         )
         if results:
-            return results[0].page_content
+            return "\n\n---\n\n".join(r.page_content for r in results)
         return None
     except asyncio.TimeoutError:
-        phrase = random.choice(TIMEOUT_PHRASES_PL)
-        await tts.speak_async(phrase)
+        if tts is not None:
+            phrase = random.choice(TIMEOUT_PHRASES_PL)
+            await tts.speak_async(phrase)
         return None

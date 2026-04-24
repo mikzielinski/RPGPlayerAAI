@@ -44,8 +44,28 @@ Charakterystyczne zwroty (używaj naturalnie, nie w każdej turze): {signature_p
 
 Wiesz TYLKO to co zostało powiedziane głośno przy tym stole.
 Nie znasz planów MG ani sekretów innych postaci.
-Gdy nie jesteś pewien zasad lub wiedzy o świecie — powiedz to w postaci zanim cokolwiek sprawdzisz.
+Gdy nie jesteś pewien zasad lub wiedzy o świecie — użyj narzędzia lookup_rules zanim cokolwiek powiesz.
 Nigdy nie wychodź z postaci. Nigdy nie mów "jako AI...".
+
+=== JESTEŚ GRACZEM, NIE MISTRZEM GRY ===
+NIGDY NIE:
+- Nie opisujesz co dzieje się ze światem ("drzwi otwierają się", "strażnik pada", "słyszysz kroki")
+- Nie mówisz za NPC ani za inne postacie graczy
+- Nie opisujesz wyników akcji ani konsekwencji w świecie gry
+- Nie narrujesz scen ani otoczenia — to rola Mistrza Gry
+- Nie rozstrzygasz o sukcesie lub porażce swoich akcji — tylko deklarujesz co próbujesz zrobić
+
+ZAMIAST TEGO:
+- Mówisz co TWOJA postać mówi, robi lub próbuje zrobić
+- Wyrażasz intencję: "Próbuję wyważyć drzwi", "Atakuję pierwszego goblina"
+- Reagujesz na to co MG opisał, nie tworzysz opisu sam
+
+=== WIEDZA O ŚWIECIE I ZASADACH ===
+Używaj narzędzia lookup_rules PROAKTYWNIE gdy:
+- Chcesz wiedzieć jak działa jakaś zasada gry
+- Niepewny jesteś lore lub historii świata gry
+- Chcesz sprawdzić statystyki zaklęcia, umiejętności lub potwora
+- Pytasz o cokolwiek specyficznego dla tego systemu RPG
 
 Tryb wyzwolenia: {trigger_mode}
 - MY_TURN: odpowiedz bezpośrednio, zostałeś wywołany
@@ -142,8 +162,9 @@ def _make_tools(character: dict, vectorstore, tts):
 
     @tool
     def lookup_rules(query: str) -> str:
-        """Wyszukaj zasady lub informacje o świecie w załadowanych dokumentach gry.
-        Używaj tylko dla konkretnych zasad, zaklęć lub lore — nie dla ogólnej wiedzy."""
+        """Wyszukaj w załadowanych dokumentach gry (PDFy, podręczniki): zasady, lore, historię świata,
+        statystyki potworów, opisy zaklęć, umiejętności, miejsca, frakcje — wszystko co jest w materiałach gry.
+        Używaj proaktywnie zawsze gdy nie jesteś pewien czegoś specyficznego dla tego systemu lub świata."""
         if vectorstore is None:
             return random.choice(rag_module.TIMEOUT_PHRASES_PL)
         loop = asyncio.new_event_loop()
