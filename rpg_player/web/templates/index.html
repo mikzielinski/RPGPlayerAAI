@@ -408,87 +408,271 @@
 
     <!-- TAB: Discord -->
     <main class="tab-content" id="tab-discord">
-      <div class="page-grid">
+      <div class="wizard-wrap">
 
-        <section class="card">
-          <div class="card-header"><h2>Konfiguracja Discord</h2></div>
+        <!-- Already-configured banner (shown when Discord is set up) -->
+        <div id="wizConfiguredBanner" class="wizard-configured-banner hidden">
+          <div class="wizard-configured-left">
+            <div class="wizard-configured-icon">✅</div>
+            <div>
+              <strong>Discord skonfigurowany</strong>
+              <div id="wizConfiguredSummary" class="help-text mt-1"></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+            <button id="wizReconfigureBtn" class="btn btn-sm">⚙ Zmień konfigurację</button>
+            <button id="wizDisableBtn" class="btn btn-sm btn-danger">✕ Wyłącz Discord</button>
+          </div>
+        </div>
 
-          <div class="form-row checkbox-row">
-            <label class="toggle-label">
-              <input id="discordEnabled" type="checkbox" class="toggle" />
-              <span class="toggle-track"></span>
-              DISCORD_ENABLED — włącz integrację
-            </label>
+        <!-- Wizard (shown when not configured, or reconfiguring) -->
+        <div id="wizardContainer">
+
+          <!-- Progress bar -->
+          <div class="wizard-progress" id="wizardProgress">
+            <div class="wizard-step-item active" data-step="1">
+              <div class="wizard-step-num">1</div>
+              <div class="wizard-step-label">Aplikacja</div>
+            </div>
+            <div class="wizard-step-connector"></div>
+            <div class="wizard-step-item" data-step="2">
+              <div class="wizard-step-num">2</div>
+              <div class="wizard-step-label">Token</div>
+            </div>
+            <div class="wizard-step-connector"></div>
+            <div class="wizard-step-item" data-step="3">
+              <div class="wizard-step-num">3</div>
+              <div class="wizard-step-label">Serwer</div>
+            </div>
+            <div class="wizard-step-connector"></div>
+            <div class="wizard-step-item" data-step="4">
+              <div class="wizard-step-num">4</div>
+              <div class="wizard-step-label">Kanały</div>
+            </div>
+            <div class="wizard-step-connector"></div>
+            <div class="wizard-step-item" data-step="5">
+              <div class="wizard-step-num">5</div>
+              <div class="wizard-step-label">Gotowe</div>
+            </div>
           </div>
 
-          <div class="form-row checkbox-row">
-            <label class="toggle-label">
-              <input id="discordTextOnly" type="checkbox" class="toggle" checked />
-              <span class="toggle-track"></span>
-              DISCORD_TEXT_ONLY — tylko tekst (brak TTS, brak mikrofonu)
-            </label>
-            <p class="help-text">Zalecane: bot przyjmuje i wysyła wiadomości tekstem przez kanał Discord. Wyłącz tylko jeśli chcesz równoległe TTS na komputerze.</p>
+          <!-- Step 1: Create Application -->
+          <div class="wizard-panel active" id="wizardPanel1">
+            <div class="card wizard-card">
+              <div class="wizard-card-header">
+                <div class="wizard-step-badge">1</div>
+                <div>
+                  <h2>Utwórz aplikację Discord</h2>
+                  <p class="help-text">Zacznijmy od stworzenia aplikacji w portalu deweloperów Discord.</p>
+                </div>
+              </div>
+              <ol class="wizard-instructions">
+                <li>Otwórz <strong>Discord Developer Portal</strong> klikając przycisk poniżej</li>
+                <li>Kliknij <strong>New Application</strong> w prawym górnym rogu</li>
+                <li>Wpisz nazwę bota (np. <code>RPGPlayer</code>) i kliknij <strong>Create</strong></li>
+                <li>Zanotuj <strong>Application ID</strong> — przyda się przy generowaniu linka</li>
+              </ol>
+              <div class="actions mt-2">
+                <a href="https://discord.com/developers/applications" target="_blank" rel="noopener" class="btn btn-secondary">
+                  🔗 Otwórz Discord Developer Portal
+                </a>
+              </div>
+              <div class="wizard-nav">
+                <div></div>
+                <button class="btn btn-primary" id="wizStep1Next">Mam aplikację →</button>
+              </div>
+            </div>
           </div>
 
-          <div class="form-row">
-            <label for="discordBotToken">Token bota (DISCORD_BOT_TOKEN)</label>
-            <input id="discordBotToken" type="password" placeholder="Bot token z Discord Developer Portal" autocomplete="off" />
-            <p class="help-text">Wygeneruj/zresetuj token w <strong>Discord Developer Portal → Twoja aplikacja → Bot → Reset Token</strong>.</p>
+          <!-- Step 2: Bot Token -->
+          <div class="wizard-panel" id="wizardPanel2">
+            <div class="card wizard-card">
+              <div class="wizard-card-header">
+                <div class="wizard-step-badge">2</div>
+                <div>
+                  <h2>Token bota</h2>
+                  <p class="help-text">Wygeneruj token bota i wklej go tutaj — to klucz dostępu do Twojego bota.</p>
+                </div>
+              </div>
+              <ol class="wizard-instructions">
+                <li>W lewym menu kliknij <strong>Bot</strong></li>
+                <li>Kliknij <strong>Reset Token</strong> (potwierdź hasłem lub 2FA jeśli wymagane)</li>
+                <li>Skopiuj token — widoczny <strong>tylko raz</strong>, potem zniknie</li>
+                <li>Wklej go w pole poniżej</li>
+              </ol>
+              <div class="form-row mt-2">
+                <label for="wizTokenInput">Token bota</label>
+                <input id="wizTokenInput" type="password" placeholder="MT..." autocomplete="off" />
+              </div>
+              <div class="wizard-verify-row">
+                <button id="wizVerifyTokenBtn" class="btn">⚡ Sprawdź token</button>
+                <span id="wizTokenStatus" class="wizard-status"></span>
+              </div>
+              <div class="wizard-nav">
+                <button class="btn btn-ghost" id="wizStep2Back">← Wróć</button>
+                <button class="btn btn-primary" id="wizStep2Next" disabled>Dalej →</button>
+              </div>
+            </div>
           </div>
 
-          <div class="form-row">
-            <label for="discordGuildId">ID serwera (DISCORD_GUILD_ID)</label>
-            <input id="discordGuildId" type="text" placeholder="np. 1234567890123456789" />
-            <p class="help-text">Prawy klik na nazwę serwera → Kopiuj ID serwera (tryb dewelopera musi być włączony w Ustawieniach → Zaawansowane).</p>
+          <!-- Step 3: Add Bot to Server -->
+          <div class="wizard-panel" id="wizardPanel3">
+            <div class="card wizard-card">
+              <div class="wizard-card-header">
+                <div class="wizard-step-badge">3</div>
+                <div>
+                  <h2>Dodaj bota do serwera</h2>
+                  <p class="help-text">Wygeneruj link zaproszenia i skonfiguruj uprawnienia bota.</p>
+                </div>
+              </div>
+
+              <div class="section-divider">1 — Wygeneruj link zaproszenia</div>
+              <ol class="wizard-instructions">
+                <li>W lewym menu wybierz <strong>OAuth2 → URL Generator</strong></li>
+                <li>W sekcji <strong>Scopes</strong> zaznacz <code>bot</code></li>
+                <li>W sekcji <strong>Bot Permissions</strong> zaznacz:<br/>
+                  <code>View Channels</code> &middot; <code>Send Messages</code> &middot; <code>Read Message History</code><br/>
+                  Opcjonalnie (tryb głosowy): <code>Connect</code> &middot; <code>Speak</code>
+                </li>
+                <li>Skopiuj wygenerowany URL, otwórz w przeglądarce, wybierz serwer → <strong>Autoryzuj</strong></li>
+              </ol>
+
+              <div class="section-divider mt-2">2 — Włącz Gateway Intents (obowiązkowe)</div>
+              <div class="wizard-intents-box">
+                <p class="help-text mb-1">W Developer Portal → <strong>Bot → Privileged Gateway Intents</strong> włącz oba:</p>
+                <div class="wizard-intent-item">
+                  <span class="wizard-intent-badge">✓</span>
+                  <div><strong>Message Content Intent</strong> <span class="help-text">— do odczytywania treści wiadomości</span></div>
+                </div>
+                <div class="wizard-intent-item">
+                  <span class="wizard-intent-badge">✓</span>
+                  <div><strong>Server Members Intent</strong> <span class="help-text">— do rozpoznawania użytkowników</span></div>
+                </div>
+              </div>
+
+              <div class="section-divider mt-2">3 — Podaj ID serwera</div>
+              <p class="help-text mb-1">
+                Prawy klik na <strong>nazwę serwera → Kopiuj ID serwera</strong><br/>
+                (Ustawienia Discord → Zaawansowane → włącz <strong>Tryb dewelopera</strong>)
+              </p>
+              <div class="form-row">
+                <label for="wizGuildInput">ID serwera</label>
+                <input id="wizGuildInput" type="text" placeholder="np. 1155597612771188796" />
+              </div>
+              <div class="wizard-verify-row">
+                <button id="wizVerifyGuildBtn" class="btn">⚡ Sprawdź serwer</button>
+                <span id="wizGuildStatus" class="wizard-status"></span>
+              </div>
+              <div class="wizard-nav">
+                <button class="btn btn-ghost" id="wizStep3Back">← Wróć</button>
+                <button class="btn btn-primary" id="wizStep3Next" disabled>Dalej →</button>
+              </div>
+            </div>
           </div>
 
-          <div class="form-row">
-            <label for="discordTextChannelId">ID kanału tekstowego (DISCORD_TEXT_CHANNEL_ID)</label>
-            <input id="discordTextChannelId" type="text" placeholder="ID kanału #rpg-session" />
-            <p class="help-text">Prawy klik na kanał → Kopiuj ID kanału.</p>
+          <!-- Step 4: Channels -->
+          <div class="wizard-panel" id="wizardPanel4">
+            <div class="card wizard-card">
+              <div class="wizard-card-header">
+                <div class="wizard-step-badge">4</div>
+                <div>
+                  <h2>Kanały Discord</h2>
+                  <p class="help-text">Wskaż kanały na których bot będzie działał.</p>
+                </div>
+              </div>
+              <p class="help-text mb-2">
+                Prawy klik na <strong>kanał → Kopiuj ID kanału</strong>
+              </p>
+              <div class="form-row">
+                <label for="wizTextChannelInput">
+                  ID kanału tekstowego
+                  <span class="wiz-required">wymagane</span>
+                </label>
+                <input id="wizTextChannelInput" type="text" placeholder="ID kanału #rpg-session" />
+                <p class="help-text">Bot będzie czytał i pisał wiadomości na tym kanale.</p>
+              </div>
+              <div class="form-row">
+                <label for="wizVoiceChannelInput">
+                  ID kanału głosowego
+                  <span class="wiz-optional">opcjonalne</span>
+                </label>
+                <input id="wizVoiceChannelInput" type="text" placeholder="ID kanału głosowego (tylko tryb voice)" />
+                <p class="help-text">Potrzebne tylko gdy chcesz tryb głosowy. Wymaga FFmpeg i dodatkowych zależności.</p>
+              </div>
+              <div class="wizard-verify-row">
+                <button id="wizVerifyChannelBtn" class="btn">⚡ Sprawdź kanał</button>
+                <span id="wizChannelStatus" class="wizard-status"></span>
+              </div>
+              <div class="wizard-nav">
+                <button class="btn btn-ghost" id="wizStep4Back">← Wróć</button>
+                <button class="btn btn-primary" id="wizStep4Next" disabled>Dalej →</button>
+              </div>
+            </div>
           </div>
 
-          <div class="form-row">
-            <label for="discordVoiceChannelId">ID kanału głosowego (DISCORD_VOICE_CHANNEL_ID)</label>
-            <input id="discordVoiceChannelId" type="text" placeholder="ID kanału głosowego (opcjonalnie)" />
+          <!-- Step 5: Mode & Save -->
+          <div class="wizard-panel" id="wizardPanel5">
+            <div class="card wizard-card">
+              <div class="wizard-card-header">
+                <div class="wizard-step-badge">5</div>
+                <div>
+                  <h2>Tryb i zapis</h2>
+                  <p class="help-text">Wybierz tryb komunikacji i zapisz konfigurację.</p>
+                </div>
+              </div>
+
+              <div class="section-divider">Tryb komunikacji</div>
+              <div class="wizard-mode-cards">
+                <div class="wizard-mode-card wizard-mode-selected" id="wizModeText">
+                  <div class="wizard-mode-icon">💬</div>
+                  <div class="wizard-mode-title">Tekst (zalecane)</div>
+                  <div class="help-text">Bot czyta i pisze wiadomości na kanale tekstowym. Proste, stabilne, zero zależności.</div>
+                </div>
+                <div class="wizard-mode-card" id="wizModeVoice">
+                  <div class="wizard-mode-icon">🎤</div>
+                  <div class="wizard-mode-title">Głos (zaawansowane)</div>
+                  <div class="help-text">Bot dołącza do kanału głosowego i mówi przez TTS. Wymaga FFmpeg, libopus, libsodium.</div>
+                </div>
+              </div>
+
+              <div class="section-divider mt-2">Podsumowanie</div>
+              <div id="wizSummary" class="wizard-summary"></div>
+
+              <div class="wizard-nav">
+                <button class="btn btn-ghost" id="wizStep5Back">← Wróć</button>
+                <button class="btn btn-primary" id="wizSaveBtn">✓ Zapisz konfigurację Discord</button>
+              </div>
+
+              <div id="wizSuccessBanner" class="wizard-success hidden">
+                <div class="wizard-success-icon">✅</div>
+                <div>
+                  <strong>Konfiguracja Discord zapisana!</strong>
+                  <p class="help-text mt-1">Uruchom bota z zakładki <strong>Panel → ▶ Start bota</strong></p>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div class="actions mt-2">
-            <button id="saveDiscordBtn" class="btn btn-primary">Zapisz konfigurację Discord</button>
-          </div>
+        </div><!-- /wizardContainer -->
 
-          <div class="card mt-2" style="background:var(--bg-secondary);border:1px solid var(--border)">
-            <div class="card-header"><h3>Jak dodać bota do serwera</h3></div>
-            <ol class="help-text" style="padding-left:1.2rem;line-height:1.8">
-              <li>Idź na <strong>discord.com/developers/applications</strong></li>
-              <li>Wybierz swoją aplikację → <strong>OAuth2 → URL Generator</strong></li>
-              <li>Zaznacz scope: <code>bot</code></li>
-              <li>Zaznacz uprawnienia: <code>Read Messages</code>, <code>Send Messages</code>, <code>View Channels</code>, <code>Read Message History</code></li>
-              <li>Skopiuj wygenerowany URL i otwórz w przeglądarce</li>
-              <li>Wybierz swój serwer i kliknij <strong>Autoryzuj</strong></li>
-              <li>W <strong>Bot → Privileged Gateway Intents</strong> włącz: <code>Message Content Intent</code>, <code>Server Members Intent</code></li>
-            </ol>
-          </div>
-        </section>
-
-        <section class="card">
+        <!-- Status section — always visible -->
+        <div class="card mt-2">
           <div class="card-header">
-            <h2>Status Discord</h2>
+            <h3>Status połączenia</h3>
             <div style="display:flex;gap:.5rem">
-              <button id="testDiscordBtn" class="btn btn-sm btn-primary">⚡ Testuj połączenie</button>
+              <button id="testDiscordBtn" class="btn btn-sm btn-primary">⚡ Testuj</button>
               <button id="reloadDiscordBtn" class="btn btn-sm">Odśwież</button>
             </div>
           </div>
-          <p class="help-text mb-2">
-            Górna sekcja pokazuje konfigurację z pliku <code>.env</code>.
-            <strong>⚡ Testuj połączenie</strong> weryfikuje token i dostęp do serwera/kanału przez Discord REST API — bez uruchamiania bota.
-            Dolna sekcja <em>Połączenie</em> jest aktywna gdy <strong>bot jest uruchomiony</strong> (Panel → Start).
+          <p class="help-text mb-1">
+            <strong>⚡ Testuj</strong> — weryfikuje token i dostęp przez Discord REST API (bez uruchamiania bota).
+            Sekcja <em>Połączenie</em> aktywna gdy bot działa (Panel → Start).
           </p>
-          <pre id="discordTestView" class="console" style="min-height:3rem;margin-bottom:.5rem;display:none"></pre>
-          <pre id="discordStatusView" class="console console-tall"></pre>
-        </section>
+          <pre id="discordTestView" class="console" style="min-height:2rem;display:none;margin-bottom:.5rem"></pre>
+          <pre id="discordStatusView" class="console"></pre>
+        </div>
 
-      </div>
+      </div><!-- /wizard-wrap -->
     </main>
 
     <!-- TAB: Sekrety -->

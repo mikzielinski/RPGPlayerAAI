@@ -643,17 +643,23 @@ def create_app() -> Flask:
 
     @app.post("/api/discord/test")
     def api_discord_test():
-        """Quick REST-only connection test — no gateway/websocket needed."""
+        """Quick REST-only connection test — no gateway/websocket needed.
+
+        Accepts optional JSON body: {token, guild_id, channel_id}.
+        Falls back to .env values when body fields are absent (for the wizard's
+        per-step validation before settings are saved).
+        """
         import urllib.request
         import urllib.error
 
+        body = request.get_json(silent=True) or {}
         env_file = _load_env_file()
-        token = env_file.get("DISCORD_BOT_TOKEN", "").strip()
-        guild_id = env_file.get("DISCORD_GUILD_ID", "").strip()
-        channel_id = env_file.get("DISCORD_TEXT_CHANNEL_ID", "").strip()
+        token = (body.get("token") or env_file.get("DISCORD_BOT_TOKEN", "")).strip()
+        guild_id = (body.get("guild_id") or env_file.get("DISCORD_GUILD_ID", "")).strip()
+        channel_id = (body.get("channel_id") or env_file.get("DISCORD_TEXT_CHANNEL_ID", "")).strip()
 
         if not token:
-            return jsonify({"ok": False, "step": "token", "message": "DISCORD_BOT_TOKEN nie ustawiony w .env"})
+            return jsonify({"ok": False, "step": "token", "message": "Wklej token bota"})
 
         base = "https://discord.com/api/v10"
         headers = {"Authorization": f"Bot {token}", "Content-Type": "application/json"}

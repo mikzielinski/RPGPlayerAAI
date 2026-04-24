@@ -651,3 +651,146 @@ body {
 .mode-status-text {
   font-size: 0.8rem; color: var(--text-2); white-space: nowrap;
 }
+
+/* ── Discord Setup Wizard ──────────────────────────────────────────── */
+.wizard-wrap { max-width: 740px; margin: 0 auto; padding: 1.5rem 1rem; }
+
+/* Progress bar */
+.wizard-progress {
+  display: flex; align-items: center; margin-bottom: 1.8rem;
+  padding: 0 .5rem;
+}
+.wizard-step-item {
+  display: flex; flex-direction: column; align-items: center; gap: .3rem;
+  cursor: default;
+}
+.wizard-step-num {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 2px solid var(--border-hi); color: var(--text-2);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: .85rem; transition: all .25s;
+}
+.wizard-step-item.active .wizard-step-num {
+  border-color: var(--primary); background: var(--primary); color: #fff;
+}
+.wizard-step-item.done .wizard-step-num {
+  border-color: var(--success); background: var(--success); color: #fff;
+  font-size: 0;
+}
+.wizard-step-item.done .wizard-step-num::after { content: '✓'; font-size: .85rem; }
+.wizard-step-label { font-size: .68rem; color: var(--text-3); white-space: nowrap; }
+.wizard-step-item.active .wizard-step-label,
+.wizard-step-item.done  .wizard-step-label { color: var(--text-2); }
+.wizard-step-connector {
+  flex: 1; height: 2px; background: var(--border); margin: 0 .4rem; margin-bottom: 1rem;
+  transition: background .25s;
+}
+.wizard-step-connector.done { background: var(--success); }
+
+/* Panel visibility */
+.wizard-panel { display: none; }
+.wizard-panel.active { display: block; }
+
+/* Card */
+.wizard-card { padding: 1.5rem !important; }
+.wizard-card-header {
+  display: flex; gap: 1rem; align-items: flex-start; margin-bottom: 1.4rem;
+}
+.wizard-step-badge {
+  width: 44px; height: 44px; border-radius: 50%; background: var(--primary);
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 1.2rem; flex-shrink: 0;
+}
+
+/* Instructions list */
+.wizard-instructions {
+  padding-left: 1.3rem; line-height: 2; color: var(--text);
+  margin-bottom: .5rem;
+}
+.wizard-instructions li { padding-left: .2rem; }
+
+/* Verify row */
+.wizard-verify-row {
+  display: flex; align-items: center; gap: .8rem; margin-top: .8rem;
+  flex-wrap: wrap;
+}
+.wizard-status { font-size: .85rem; font-weight: 500; }
+.wizard-status.ok  { color: #3bd985; }
+.wizard-status.err { color: var(--danger-hi); }
+.wizard-status.pending { color: var(--accent); }
+
+/* Nav row */
+.wizard-nav {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border);
+}
+
+/* Intents box */
+.wizard-intents-box {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: .8rem 1rem; margin-bottom: .5rem;
+}
+.wizard-intent-item {
+  display: flex; align-items: flex-start; gap: .6rem; padding: .3rem 0;
+}
+.wizard-intent-badge { color: #3bd985; font-weight: 700; flex-shrink: 0; }
+
+/* Mode cards */
+.wizard-mode-cards { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+.wizard-mode-card {
+  border: 2px solid var(--border); border-radius: var(--radius);
+  padding: 1.1rem 1rem; cursor: pointer; transition: all .2s;
+}
+.wizard-mode-card:hover { border-color: var(--border-hi); background: var(--surface-2); }
+.wizard-mode-selected {
+  border-color: var(--primary) !important;
+  background: rgba(45,104,240,.08) !important;
+}
+.wizard-mode-icon { font-size: 1.8rem; margin-bottom: .4rem; }
+.wizard-mode-title { font-weight: 600; margin-bottom: .3rem; color: var(--text); }
+
+/* Summary */
+.wizard-summary {
+  background: var(--surface-2); border-radius: var(--radius-sm);
+  padding: .8rem 1rem; display: flex; flex-direction: column; gap: .4rem;
+}
+.wizard-summary-row { display: flex; align-items: center; gap: .6rem; }
+.wizard-summary-key  { color: var(--text-2); min-width: 130px; font-size: .82rem; }
+.wizard-summary-val  { color: var(--text); font-weight: 500; font-size: .9rem; }
+
+/* Success banner */
+.wizard-success {
+  display: flex; align-items: center; gap: 1rem;
+  background: rgba(26,158,88,.1); border: 1px solid #1a9e5840;
+  border-radius: var(--radius); padding: 1rem 1.2rem; margin-top: 1.2rem;
+}
+.wizard-success-icon { font-size: 1.6rem; }
+.wizard-success.hidden { display: none; }
+
+/* Required / optional labels */
+.wiz-required {
+  background: rgba(192,39,58,.18); color: #e03349;
+  border-radius: 3px; padding: 1px 5px; font-size: .68rem; font-weight: 600;
+  margin-left: .3rem;
+}
+.wiz-optional {
+  background: rgba(100,110,150,.18); color: var(--text-2);
+  border-radius: 3px; padding: 1px 5px; font-size: .68rem;
+  margin-left: .3rem;
+}
+
+/* Already-configured banner */
+.wizard-configured-banner {
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: .8rem;
+  background: rgba(26,158,88,.1); border: 1px solid #1a9e5840;
+  border-radius: var(--radius); padding: 1rem 1.2rem; margin-bottom: 1.2rem;
+}
+.wizard-configured-banner.hidden { display: none; }
+.wizard-configured-left { display: flex; align-items: flex-start; gap: .8rem; }
+.wizard-configured-icon { font-size: 1.5rem; }
+
+@media (max-width: 520px) {
+  .wizard-mode-cards { grid-template-columns: 1fr; }
+  .wizard-progress { overflow-x: auto; padding-bottom: .3rem; }
+}

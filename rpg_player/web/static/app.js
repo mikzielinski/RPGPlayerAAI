@@ -418,12 +418,10 @@ async function refreshState() {
     _setVal("openaiTtsModel", env.openai_tts_model || "");
     _setVal("openaiTtsVoice", env.openai_tts_voice || "");
     _setVal("openaiTtsFormat", env.openai_tts_format || "mp3");
-    _setChecked("discordEnabled", !!env.discord_enabled);
-    _setChecked("discordTextOnly", env.discord_text_only !== false);
-    _setVal("discordGuildId", env.discord_guild_id || "");
-    _setVal("discordTextChannelId", env.discord_text_channel_id || "");
-    _setVal("discordVoiceChannelId", env.discord_voice_channel_id || "");
   }
+
+  // Show configured banner if Discord is already set up
+  _wizShowConfigured();
 }
 
 function _setVal(id, val) {
@@ -998,14 +996,267 @@ async function uploadSecretFile() {
   }
 }
 
+// ── Discord Setup Wizard ─────────────────────────────────────────────
+const _wiz = {
+  step: 1,
+  token: "",
+  guildId: "",
+  textChannelId: "",
+  voiceChannelId: "",
+  textOnly: true,
+  verified: { token: false, guild: false, channel: false },
+  names: { bot: "", guild: "", channel: "" },
+};
+
+function wizardGo(step) {
+  document.querySelectorAll(".wizard-panel").forEach((p) => p.classList.remove("active"));
+  const panel = document.getElementById(`wizardPanel${step}`);
+  if (panel) panel.classList.add("active");
+  _wiz.step = step;
+
+  // Update progress dots and connectors
+  const items = document.querySelectorAll(".wizard-step-item");
+  const connectors = document.querySelectorAll(".wizard-step-connector");
+  items.forEach((item) => {
+    const n = parseInt(item.dataset.step, 10);
+    item.classList.remove("active", "done");
+    if (n === step) item.classList.add("active");
+    else if (n < step) item.classList.add("done");
+  });
+  connectors.forEach((c, i) => c.classList.toggle("done", i + 1 < step));
+
+  if (step === 5) _wizUpdateSummary();
+}
+
+function wizSetMode(mode) {
+  _wiz.textOnly = mode === "text";
+  document.getElementById("wizModeText")?.classList.toggle("wizard-mode-selected", mode === "text");
+  document.getElementById("wizModeVoice")?.classList.toggle("wizard-mode-selected", mode === "voice");
+  _wizUpdateSummary();
+}
+
+function _wizUpdateSummary() {
+  const el = document.getElementById("wizSummary");
+  if (!el) return;
+  const rows = [
+    { key: "Bot", val: _wiz.names.bot || "—" },
+    { key: "Serwer", val: _wiz.names.guild || "—" },
+    { key: "Kanał tekstowy", val: _wiz.names.channel || "—" },
+    { key: "Kanał głosowy", val: _wiz.voiceChannelId || "(nie skonfigurowany)" },
+    { key: "Tryb", val: _wiz.textOnly ? "💬 Tylko tekst" : "🎤 Głos (TTS przez Discord)" },
+  ];
+  el.innerHTML = rows
+    .map(
+      (r) => `<div class="wizard-summary-row">
+        <span class="wizard-summary-key">${r.key}</span>
+        <span class="wizard-summary-val">${r.val}</span>
+      </div>`,
+    )
+    .join("");
+}
+
+function _wizSetStatus(id, state, msg) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.className = "wizard-status" + (state === "ok" ? " ok" : state === "err" ? " err" : state === "pending" ? " pending" : "");
+}
+
+async function wizVerifyToken() {
+  const token = (document.getElementById("wizTokenInput")?.value || "").trim();
+  if (!token) { _wizSetStatus("wizTokenStatus", "err", "Wklej token bota!"); return; }
+  _wizSetStatus("wizTokenStatus", "pending", "⏳ Sprawdzam...");
+  const btn = document.getElementById("wizVerifyTokenBtn");
+  if (btn) btn.disabled = true;
+  try {
+    const res = await requestJson("/api/discord/test", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    });
+    if (res.ok) {
+      _wiz.token = token;
+      _wiz.verified.token = true;
+      _wiz.names.bot = res.bot || "";
+      _wizSetStatus("wizTokenStatus", "ok", `✅ ${res.bot}`);
+      const next = document.getElementById("wizStep2Next");
+      if (next) next.disabled = false;
+    } else {
+      _wiz.verified.token = false;
+      _wizSetStatus("wizTokenStatus", "err", `❌ ${res.message || "Nieprawidłowy token"}`);
+    }
+  } catch (e) {
+    _wizSetStatus("wizTokenStatus", "err", `❌ ${e.message}`);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function wizVerifyGuild() {
+  const guildId = (document.getElementById("wizGuildInput")?.value || "").trim();
+  if (!guildId) { _wizSetStatus("wizGuildStatus", "err", "Wpisz ID serwera!"); return; }
+  if (!_wiz.verified.token) { _wizSetStatus("wizGuildStatus", "err", "Najpierw zweryfikuj token (krok 2)!"); return; }
+  _wizSetStatus("wizGuildStatus", "pending", "⏳ Sprawdzam...");
+  const btn = document.getElementById("wizVerifyGuildBtn");
+  if (btn) btn.disabled = true;
+  try {
+    const res = await requestJson("/api/discord/test", {
+      method: "POST",
+      body: JSON.stringify({ token: _wiz.token, guild_id: guildId }),
+    });
+    if (res.ok) {
+      _wiz.guildId = guildId;
+      _wiz.verified.guild = true;
+      _wiz.names.guild = res.guild || guildId;
+      _wizSetStatus("wizGuildStatus", "ok", `✅ ${res.guild}`);
+      const next = document.getElementById("wizStep3Next");
+      if (next) next.disabled = false;
+    } else {
+      _wiz.verified.guild = false;
+      _wizSetStatus("wizGuildStatus", "err", `❌ ${res.guild_error || res.message || "Brak dostępu do serwera"}`);
+    }
+  } catch (e) {
+    _wizSetStatus("wizGuildStatus", "err", `❌ ${e.message}`);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function wizVerifyChannel() {
+  const channelId = (document.getElementById("wizTextChannelInput")?.value || "").trim();
+  if (!channelId) { _wizSetStatus("wizChannelStatus", "err", "Wpisz ID kanału tekstowego!"); return; }
+  if (!_wiz.verified.guild) { _wizSetStatus("wizChannelStatus", "err", "Najpierw zweryfikuj serwer (krok 3)!"); return; }
+  _wizSetStatus("wizChannelStatus", "pending", "⏳ Sprawdzam...");
+  const btn = document.getElementById("wizVerifyChannelBtn");
+  if (btn) btn.disabled = true;
+  _wiz.voiceChannelId = (document.getElementById("wizVoiceChannelInput")?.value || "").trim();
+  try {
+    const res = await requestJson("/api/discord/test", {
+      method: "POST",
+      body: JSON.stringify({ token: _wiz.token, guild_id: _wiz.guildId, channel_id: channelId }),
+    });
+    if (res.ok) {
+      _wiz.textChannelId = channelId;
+      _wiz.verified.channel = true;
+      _wiz.names.channel = res.channel || channelId;
+      _wizSetStatus("wizChannelStatus", "ok", `✅ ${res.channel}`);
+      const next = document.getElementById("wizStep4Next");
+      if (next) next.disabled = false;
+    } else {
+      _wiz.verified.channel = false;
+      _wizSetStatus("wizChannelStatus", "err", `❌ ${res.channel_error || res.message || "Brak dostępu do kanału"}`);
+    }
+  } catch (e) {
+    _wizSetStatus("wizChannelStatus", "err", `❌ ${e.message}`);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function wizSave() {
+  const btn = document.getElementById("wizSaveBtn");
+  if (btn) btn.disabled = true;
+  try {
+    const payload = {
+      discord_enabled: true,
+      discord_text_only: _wiz.textOnly,
+      discord_bot_token: _wiz.token,
+      discord_guild_id: _wiz.guildId,
+      discord_text_channel_id: _wiz.textChannelId,
+      discord_voice_channel_id: _wiz.voiceChannelId,
+    };
+    await requestJson("/api/env", { method: "POST", body: JSON.stringify(payload) });
+    showToast("Konfiguracja Discord zapisana!");
+    document.getElementById("wizSuccessBanner")?.classList.remove("hidden");
+    state.envFormDirty = false;
+    await loadDiscordStatus();
+    _wizShowConfigured();
+  } catch (e) {
+    showToast(`Błąd zapisu: ${e.message}`, true);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function _wizShowConfigured() {
+  const d = state.lastStatus?.discord || {};
+  const env = state.lastStatus?.env || {};
+  if (!d.token_configured) return;
+  const banner = document.getElementById("wizConfiguredBanner");
+  const container = document.getElementById("wizardContainer");
+  const summary = document.getElementById("wizConfiguredSummary");
+  if (banner) banner.classList.remove("hidden");
+  if (container) container.style.display = "none";
+  if (summary) {
+    const parts = [];
+    if (d.guild) parts.push(`Serwer: ${d.guild}`);
+    if (d.text_channel) parts.push(`Kanał: ${d.text_channel}`);
+    parts.push(env.discord_text_only !== false ? "Tryb: tekst" : "Tryb: głos");
+    summary.textContent = parts.join("  ·  ");
+  }
+}
+
+function _wizShowWizard() {
+  document.getElementById("wizConfiguredBanner")?.classList.add("hidden");
+  const container = document.getElementById("wizardContainer");
+  if (container) container.style.display = "";
+  wizardGo(1);
+}
+
+async function wizDisableDiscord() {
+  try {
+    await requestJson("/api/env", { method: "POST", body: JSON.stringify({ discord_enabled: false }) });
+    showToast("Discord wyłączony.");
+    state.envFormDirty = false;
+    await loadDiscordStatus();
+    _wizShowWizard();
+  } catch (e) {
+    showToast(`Błąd: ${e.message}`, true);
+  }
+}
+
+function initWizard() {
+  // Step navigation
+  document.getElementById("wizStep1Next")?.addEventListener("click", () => wizardGo(2));
+  document.getElementById("wizStep2Back")?.addEventListener("click", () => wizardGo(1));
+  document.getElementById("wizStep2Next")?.addEventListener("click", () => wizardGo(3));
+  document.getElementById("wizStep3Back")?.addEventListener("click", () => wizardGo(2));
+  document.getElementById("wizStep3Next")?.addEventListener("click", () => wizardGo(4));
+  document.getElementById("wizStep4Back")?.addEventListener("click", () => wizardGo(3));
+  document.getElementById("wizStep4Next")?.addEventListener("click", () => wizardGo(5));
+  document.getElementById("wizStep5Back")?.addEventListener("click", () => wizardGo(4));
+
+  // Verify buttons
+  document.getElementById("wizVerifyTokenBtn")?.addEventListener("click", wizVerifyToken);
+  document.getElementById("wizVerifyGuildBtn")?.addEventListener("click", wizVerifyGuild);
+  document.getElementById("wizVerifyChannelBtn")?.addEventListener("click", wizVerifyChannel);
+  document.getElementById("wizSaveBtn")?.addEventListener("click", wizSave);
+
+  // Mode cards
+  document.getElementById("wizModeText")?.addEventListener("click", () => wizSetMode("text"));
+  document.getElementById("wizModeVoice")?.addEventListener("click", () => wizSetMode("voice"));
+
+  // Reconfigure / disable
+  document.getElementById("wizReconfigureBtn")?.addEventListener("click", _wizShowWizard);
+  document.getElementById("wizDisableBtn")?.addEventListener("click", wizDisableDiscord);
+
+  // Enter key shortcuts in input fields
+  document.getElementById("wizTokenInput")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") wizVerifyToken();
+  });
+  document.getElementById("wizGuildInput")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") wizVerifyGuild();
+  });
+  document.getElementById("wizTextChannelInput")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") wizVerifyChannel();
+  });
+}
+
 function wireEvents() {
   const markDirty = () => { state.envFormDirty = true; };
   [
     "whisperLanguage", "whisperInsecureSsl", "swearingIntensity", "responseMode", "allowSpeakUp",
     "enableExtraPlayers", "ttsBackend", "ttsVoice", "openaiTtsModel", "openaiTtsVoice",
     "openaiTtsFormat", "openaiKey",
-    "discordEnabled", "discordTextOnly", "discordGuildId", "discordTextChannelId",
-    "discordVoiceChannelId", "discordBotToken",
   ].forEach((id) => {
     const el = document.getElementById(id);
     if (el) { el.addEventListener("change", markDirty); el.addEventListener("input", markDirty); }
@@ -1028,7 +1279,6 @@ function wireEvents() {
   document.getElementById("validateBtn").addEventListener("click", validateSetup);
   document.getElementById("ingestBtn").addEventListener("click", ingestFiles);
   document.getElementById("saveEnvBtn").addEventListener("click", saveEnv);
-  document.getElementById("saveDiscordBtn")?.addEventListener("click", saveDiscord);
   document.getElementById("reloadGameLogBtn").addEventListener("click", loadGameLog);
   document.getElementById("reloadDiscordBtn")?.addEventListener("click", loadDiscordStatus);
   document.getElementById("testDiscordBtn")?.addEventListener("click", testDiscordConnection);
@@ -1132,6 +1382,7 @@ function wireEvents() {
   });
 
   initLogTableEvents();
+  initWizard();
 }
 
 // ── Bootstrap ────────────────────────────────────────────────────────
