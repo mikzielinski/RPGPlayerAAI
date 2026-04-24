@@ -20,9 +20,12 @@ from rpg_player.session import game_detector
 
 _SUPPORTED = {".docx", ".pdf", ".xlsx"}
 _MTIME_CACHE = "data/chroma_db/.mtime_cache.json"
+_CHUNK_SIZE = 1000
+_CHUNK_OVERLAP = 100
+_CACHE_VERSION = f"chunk_{_CHUNK_SIZE}_{_CHUNK_OVERLAP}"
 
 
-def _load_mtime_cache() -> dict[str, float]:
+def _load_mtime_cache() -> dict:
     try:
         with open(_MTIME_CACHE) as f:
             return json.load(f)
@@ -30,13 +33,15 @@ def _load_mtime_cache() -> dict[str, float]:
         return {}
 
 
-def _save_mtime_cache(cache: dict[str, float]) -> None:
+def _save_mtime_cache(cache: dict) -> None:
     Path(_MTIME_CACHE).parent.mkdir(parents=True, exist_ok=True)
     with open(_MTIME_CACHE, "w") as f:
         json.dump(cache, f)
 
 
-def _files_changed(game_dir: Path, cache: dict[str, float]) -> bool:
+def _files_changed(game_dir: Path, cache: dict) -> bool:
+    if cache.get("_version") != _CACHE_VERSION:
+        return True
     for p in game_dir.iterdir():
         if p.suffix.lower() in _SUPPORTED:
             mtime = p.stat().st_mtime
@@ -92,7 +97,7 @@ def ingest_game_files(
         all_docs.extend(docs)
         new_cache[str(file_path)] = file_path.stat().st_mtime
 
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=_CHUNK_SIZE, chunk_overlap=_CHUNK_OVERLAP)
     chunks = splitter.split_documents(all_docs)
 
     chroma_path.mkdir(parents=True, exist_ok=True)
@@ -102,6 +107,7 @@ def ingest_game_files(
         persist_directory=str(chroma_path),
     )
 
+    new_cache["_version"] = _CACHE_VERSION
     _save_mtime_cache(new_cache)
     print(f"[ingest] Zaindeksowano {len(chunks)} fragmentów z {len(files)} pliku/ów.")
 

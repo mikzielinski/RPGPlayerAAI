@@ -20,6 +20,7 @@ from rpg_player.onboarding.personality_loader import load_personality
 from rpg_player.onboarding.personality_creator import create_personality
 from rpg_player.onboarding.character_loader import load_character
 from rpg_player.onboarding.character_creator import create_character
+from rpg_player.onboarding.character_extractor import try_extract_character
 from rpg_player.session.session_memory import SessionMemory
 from rpg_player.session.speaker_registry import SpeakerRegistry
 from rpg_player.session.token_tracker import TokenTracker
@@ -467,7 +468,7 @@ def main() -> None:
         memory_manager.update_players(known_players_prev)
     discord_connector.attach_registry(registry)
 
-    # 1. Ingest game files
+    # 1. Ingest game files → also auto-detects game universe from PDFs
     dash.update(status="INGESTING")
     dash.start()
     dash.log("Skanowanie plikow gry...")
@@ -479,6 +480,14 @@ def main() -> None:
         detail="Ingest plikow gry zakonczony.",
         known_players=registry.known_players,
     )
+
+    # 1b. Load game universe (detected from PDFs during ingest)
+    game_type = game_detector.load()
+    if game_type:
+        dash.log(
+            f"Swiat gry: [cyan]{game_type.get('system', '?')}[/cyan] "
+            f"/ {game_type.get('genre')} / {game_type.get('tone')}"
+        )
 
     # 2. Load or create personality
     dash.update(status="ONBOARDING")
@@ -495,34 +504,48 @@ def main() -> None:
     dash.log("Ladowanie postaci...")
     character = load_character()
     if character is None:
-        dash.log("Brak postaci — uruchamiam tworzenie...")
-        character = create_character(tts, Listener(), personality=personality)
-        dash.log(f"Postac '{character.get('name')}' zapisana.")
+        # Try to extract character data from uploaded PDF character sheet
+        if vectorstore:
+            dash.log("Szukam karty postaci w plikach gry...")
+            extracted = try_extract_character()
+            if extracted:
+                char_name_ext = extracted.get("name", "Postac")
+                dash.log(f"[green]Karta postaci z PDF: {char_name_ext}[/green]")
+                if not config.DISCORD_TEXT_ONLY:
+                    tts.speak(
+                        f"Znalazłem moją kartę! Gram jako {char_name_ext}. "
+                        "Załadowałem dane z pliku."
+                    )
+                Path(config.CHARACTER_FILE).parent.mkdir(parents=True, exist_ok=True)
+                with open(config.CHARACTER_FILE, "w", encoding="utf-8") as _f:
+                    json.dump(extracted, _f, ensure_ascii=False, indent=2)
+                character = extracted
+            else:
+                dash.log("Brak karty postaci w plikach — uruchamiam tworzenie glosowe...")
+                character = create_character(tts, Listener(), personality=personality, game_type=game_type)
+        else:
+            dash.log("Brak postaci — uruchamiam tworzenie...")
+            character = create_character(tts, Listener(), personality=personality, game_type=game_type)
+        dash.log(f"Postac '{character.get('name')}' gotowa.")
     else:
         dash.log(f"Postac '{character.get('name')}' zaladowana.")
 
-    # 3b. Load game type; ask for campaign intro if not yet provided
-    game_type = game_detector.load()
-    if game_type:
-        dash.log(
-            f"Typ gry: [cyan]{game_type.get('system', '?')}[/cyan] "
-            f"/ {game_type.get('genre')} / {game_type.get('tone')}"
-        )
-        if not game_type.get("campaign_intro") and vectorstore:
-            dash.log("Pytam o intro kampanii...")
-            if not config.DISCORD_TEXT_ONLY:
-                tts.speak(
-                    "Zanim zaczniemy — opisz krótko kampanię. "
-                    "Gdzie zaczyna się akcja i o czym jest ta gra?"
-                )
-            _intro_listener = Listener()
-            intro_text = _intro_listener.listen_once()
-            if intro_text and len(intro_text.split()) >= 3:
-                game_detector.save_intro(intro_text)
-                game_type = game_detector.load() or game_type
-                dash.log(f"[green]Intro kampanii zapisane.[/green]")
-            else:
-                dash.log("[dim]Intro kampanii pominięte.[/dim]")
+    # 3b. Ask for campaign intro if not yet provided
+    if game_type and not game_type.get("campaign_intro") and vectorstore:
+        dash.log("Pytam o intro kampanii...")
+        if not config.DISCORD_TEXT_ONLY:
+            tts.speak(
+                "Zanim zaczniemy — opisz krótko kampanię. "
+                "Gdzie zaczyna się akcja i o czym jest ta gra?"
+            )
+        _intro_listener = Listener()
+        intro_text = _intro_listener.listen_once()
+        if intro_text and len(intro_text.split()) >= 3:
+            game_detector.save_intro(intro_text)
+            game_type = game_detector.load() or game_type
+            dash.log("[green]Intro kampanii zapisane.[/green]")
+        else:
+            dash.log("[dim]Intro kampanii pominiete.[/dim]")
     game_context = game_detector.build_game_context(game_type) if game_type else ""
 
     # 4. Primary bot player
